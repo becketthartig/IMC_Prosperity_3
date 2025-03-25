@@ -7,6 +7,7 @@ def plot_csv(file_path, x_column, y_column):
     
     # Filter rows where 'product' is 'RAINFOREST_RESIN'
     df = df[df['product'] == 'RAINFOREST_RESIN']
+    df = df[df['timestamp'] < 20000]
     # df = df[df['product'] == 'KELP']
     
     # Sort by x_column in case it's unordered
@@ -25,4 +26,4 @@ def plot_csv(file_path, x_column, y_column):
     plt.show()
 
 # Example usage:
-plot_csv('c64baf0e-bf54-4a56-b807-51139d48fab0.csv', 'timestamp', 'mid_price')
+plot_csv('/Users/becketthartig/dev/P3 - Literal Zero/minor_tools/prices_round_0_day_-1.csv', 'timestamp', 'ask_price_1')
