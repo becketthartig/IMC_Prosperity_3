@@ -1,5 +1,6 @@
 from datamodel import OrderDepth, UserId, TradingState, Order, Trade, Listing
 import math
+import numpy as np
 
 def RAINFOREST_RESIN_MM(state):
 
@@ -42,6 +43,8 @@ def RAINFOREST_RESIN_MM(state):
             
     return orders
 
+
+
 def KELP_MM(state):
 
     orders = []
@@ -52,10 +55,29 @@ def KELP_MM(state):
     outstanding_bids = sorted(list(outstanding.buy_orders.keys())) # trying to buy at
     outstanding_asks = sorted(list(outstanding.sell_orders.keys())) # trying to sell at
 
-    center = round(outstanding_bids[-1] + outstanding_asks[0]) / 2
+    center = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
+
+    kept_data = [str(center)]
+    fkept_data = [center]
+
+    if state.traderData:
+        kept_data = state.traderData.split(",")
+        if len(kept_data) >= 10:
+            del kept_data[0]
+        kept_data.append(str(center))
+        fkept_data = [float(point) for point in kept_data]
+
+    steps = np.arange(len(fkept_data))
+    # print(fkept_data)
+
+    slope = 0
+    if len(fkept_data) > 1:
+        slope, _ = np.polyfit(steps, fkept_data, 1)
+    print(slope)
+
     
-    sell_threshold = center + 1
-    buy_threshold = center - 1
+    sell_threshold = center + 1 if slope > 0 else center
+    buy_threshold = center - 1 if slope < 0 else center
 
     short_q = 50 + rr_vol
     for k in outstanding_bids[::-1]:
@@ -66,17 +88,9 @@ def KELP_MM(state):
             short_q -= outstanding.buy_orders[k]
 
     if short_q > 0:
-        if short_q < 25:
-            orders.append(Order("KELP", 
-                                max(min(outstanding_asks) - 1, sell_threshold + 1), 
-                                -short_q))
-        else:
-            orders.append(Order("KELP", 
-                                max(min(outstanding_asks) - 1, sell_threshold + 1), 
-                                -25))
-            orders.append(Order("KELP", 
-                                max(min(outstanding_asks) - 1, sell_threshold), 
-                                25 - short_q))
+        orders.append(Order("KELP", 
+                            max(min(outstanding_asks) - 1, sell_threshold), 
+                            -short_q))
 
     long_q = rr_vol - 50
     for k in outstanding_asks:
@@ -87,20 +101,11 @@ def KELP_MM(state):
             long_q -= outstanding.sell_orders[k]
         
     if long_q < 0:
-        
-        if long_q > -25:
-            orders.append(Order("KELP", 
-                                min(max(outstanding_bids) + 1, buy_threshold - 1), 
-                                -long_q))
-        else:
-            orders.append(Order("KELP", 
-                                min(max(outstanding_bids) + 1, buy_threshold - 1), 
-                                25))
-            orders.append(Order("KELP", 
-                                min(max(outstanding_bids) + 1, buy_threshold), 
-                                -25 - long_q))
+        orders.append(Order("KELP", 
+                            min(max(outstanding_bids) + 1, buy_threshold), 
+                            -long_q))
             
-    return orders
+    return orders, ",".join(kept_data)
 
 
 class Trader:
@@ -109,11 +114,13 @@ class Trader:
 
         orders = {}
 
+
         # orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
         
-        orders["KELP"] = KELP_MM(state)
+        orders["KELP"], kd = KELP_MM(state)
+        
 
-        return orders, 0, "Hello"
+        return orders, 0, kd
     
 
 
@@ -186,7 +193,7 @@ if __name__ == "__main__":
     }
 
     observations = {}
-    traderData = ""
+    traderData = "50,60,60,70,80,90,100,100,110,120"
 
     s = TradingState(
         traderData,
