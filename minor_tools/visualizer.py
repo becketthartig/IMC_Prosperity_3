@@ -6,8 +6,8 @@ def plot_csv(file_path, x_column, y_column):
     df = pd.read_csv(file_path, delimiter=';')
     
     # Filter rows where 'product' is 'RAINFOREST_RESIN'
-    df = df[df['product'] == 'RAINFOREST_RESIN']
-    df = df[df['timestamp'] < 20000]
+    df = df[df['product'] == 'KELP']
+    # df = df[df['timestamp'] < 20000]
     # df = df[df['product'] == 'KELP']
     
     # Sort by x_column in case it's unordered
