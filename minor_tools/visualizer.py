@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
-def plot_csv_with_slope_and_derivative(file_path, x_column, y_column, lookback=10):
+def plot_csv_with_slope_and_derivative(file_path, x_column, y_column, lookback=13):
     # Load CSV file with semicolon delimiter
     df = pd.read_csv(file_path, delimiter=';')
 
@@ -32,6 +32,7 @@ def plot_csv_with_slope_and_derivative(file_path, x_column, y_column, lookback=1
     df["slope_rate_of_change"] = df["slope"].diff()
 
     # Create three side-by-side subplots
+    # fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
     # Plot mid_price vs. timestamp

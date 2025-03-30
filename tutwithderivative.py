@@ -55,31 +55,74 @@ def KELP_MM(state):
     outstanding_bids = sorted(list(outstanding.buy_orders.keys())) # trying to buy at
     outstanding_asks = sorted(list(outstanding.sell_orders.keys())) # trying to sell at
 
-    center = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
+    # center = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
+    center = (outstanding_bids[-1] + outstanding_asks[0]) // 2 
 
     kept_data = [str(center)]
     fkept_data = [center]
 
+    old_slope = 0
     if state.traderData:
-        kept_data = state.traderData.split(",")
-        if len(kept_data) >= 10:
+        all_data = state.traderData.split(";")
+        old_slope = float(all_data[1])
+        kept_data = all_data[0].split(",")
+        if len(kept_data) >= 20:
             del kept_data[0]
         kept_data.append(str(center))
         fkept_data = [float(point) for point in kept_data]
 
-    steps = np.arange(len(fkept_data))
-    # print(fkept_data)
-
     slope = 0
     if len(fkept_data) > 1:
-        slope, _ = np.polyfit(steps, fkept_data, 1)
-    print(slope)
+        steps = np.arange(len(fkept_data))
+        slope = np.polyfit(steps, fkept_data, 1)[0]
 
-    
-    sell_threshold = center + 1 if slope > 0 else center
-    buy_threshold = center - 1 if slope < 0 else center
+    roc = slope - old_slope
 
-    short_q = 50 + rr_vol
+    print(f"Here::{roc}::{rr_vol}::{center}::{slope}::Here")
+
+
+
+    sell_threshold = center
+    buy_threshold = center
+    # if slope > 0.05:
+    #     sell_threshold += 2
+    # elif slope < -0.05:
+    #     buy_threshold -= 2
+    # else:
+    #     sell_threshold += 1
+    #     buy_threshold -= 1
+
+    max_pos = 50
+    if roc >= 0.0125 and slope >= 0:
+        sell_threshold += 3
+        buy_threshold += 1
+    elif roc <= -0.0125  and slope <= 0:
+        buy_threshold -= 2
+    elif slope >= 0.05:
+        sell_threshold += 3
+        buy_threshold += 1
+    elif slope <= -0.05:
+        buy_threshold -= 2
+    else:
+        max_pos = 25
+        sell_threshold += 1
+        buy_threshold -= 1
+
+    # if slope > 0:
+    #     sell_threshold += 1
+    #     buy_threshold += 1
+
+
+    sell_threshold = int(round(sell_threshold))  # Ensure integer price
+    buy_threshold = int(round(buy_threshold))  # Ensure integer price
+
+    print("NEXT:", center, buy_threshold, sell_threshold)
+
+    print("NNEXT:", outstanding_bids, outstanding_asks)
+
+
+
+    short_q = max_pos + rr_vol
     for k in outstanding_bids[::-1]:
         if k >= sell_threshold and short_q > 0:
             orders.append(Order("KELP", 
@@ -92,7 +135,7 @@ def KELP_MM(state):
                             max(min(outstanding_asks) - 1, sell_threshold), 
                             -short_q))
 
-    long_q = rr_vol - 50
+    long_q = rr_vol - max_pos
     for k in outstanding_asks:
         if k <= buy_threshold and long_q < 0:
             orders.append(Order("KELP", 
@@ -104,8 +147,18 @@ def KELP_MM(state):
         orders.append(Order("KELP", 
                             min(max(outstanding_bids) + 1, buy_threshold), 
                             -long_q))
-            
-    return orders, ",".join(kept_data)
+
+    # spread = max(1, min(3, 3 - abs(slope)))
+
+
+    # **Shift buy/sell thresholds based on trend**
+    # sell_threshold = center + (2 if slope < 0 else 1)
+    # buy_threshold = center - (0 if slope < 0 else 1)
+
+    print("ORDERS:", orders)
+
+    
+    return orders, f"{",".join(kept_data)};{slope}"
 
 
 class Trader:
@@ -193,7 +246,7 @@ if __name__ == "__main__":
     }
 
     observations = {}
-    traderData = "50,60,60,70,80,90,100,100,110,120"
+    traderData = "50,60,60,70,80,90,100,100,110,120;4"
 
     s = TradingState(
         traderData,
