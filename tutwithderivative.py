@@ -98,10 +98,10 @@ def KELP_MM(state):
         buy_threshold += 1
     elif roc <= -0.0125  and slope <= 0:
         buy_threshold -= 2
-    elif slope >= 0.05:
+    elif slope >= 0.055:
         sell_threshold += 3
         buy_threshold += 1
-    elif slope <= -0.05:
+    elif slope <= -0.055:
         buy_threshold -= 2
     else:
         max_pos = 25

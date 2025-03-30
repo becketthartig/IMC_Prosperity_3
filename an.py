@@ -7,7 +7,7 @@ list6 = []
 list7 = []
 list8 = []
 
-with open("/Users/becketthartig/dev/P3 - Literal Zero/nomoney8.txt", "r") as file:
+with open("/Users/becketthartig/dev/P3 - Literal Zero/nomoney10.txt", "r") as file:
 
     # sm = 0
     # div = 0
@@ -23,16 +23,16 @@ with open("/Users/becketthartig/dev/P3 - Literal Zero/nomoney8.txt", "r") as fil
             list2.append((float(vals[-3]) - 2010) * 2)
             list3.append(float(vals[-4]) / 2)
             list4.append(0)
-            list5.append(0.05 * 20)
-            list6.append(-0.05 * 20)
+            list5.append(0.055 * 20)
+            list6.append(-0.055 * 20)
 
             if roc >= 0.0125 and s >= 0:
                 list8.append(20)
             elif roc <= -0.0125  and s <= 0:
                 list8.append(-20)
-            elif s >= 0.05:
+            elif s >= 0.055:
                 list8.append(20)
-            elif s <= -0.05:
+            elif s <= -0.055:
                 list8.append(-20)
             else:
                 list8.append(0)
