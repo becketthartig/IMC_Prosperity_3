@@ -62,9 +62,11 @@ def KELP_MM(state):
     fkept_data = [center]
 
     old_slope = 0
+    signal_tracker = 0
     if state.traderData:
         all_data = state.traderData.split(";")
         old_slope = float(all_data[1])
+        signal_tracker = float(all_data[2])
         kept_data = all_data[0].split(",")
         if len(kept_data) >= 20:
             del kept_data[0]
@@ -78,7 +80,7 @@ def KELP_MM(state):
 
     roc = slope - old_slope
 
-    print(f"Here::{roc}::{rr_vol}::{center}::{slope}::Here")
+    print(f"Here::{signal_tracker}::{roc}::{rr_vol}::{center}::{slope}::Here")
 
 
 
@@ -94,17 +96,23 @@ def KELP_MM(state):
 
     max_pos = 50
     if roc >= 0.0125 and slope >= 0:
+        signal_tracker = signal_tracker + 1 if signal_tracker >= 0 else 1 
         sell_threshold += 3
         buy_threshold += 1
     elif roc <= -0.0125  and slope <= 0:
         buy_threshold -= 2
-    elif slope >= 0.055:
+        signal_tracker = signal_tracker - 1 if signal_tracker <= 0 else -1 
+    elif slope >= 0.055 and roc >= 0:
+        signal_tracker = signal_tracker + 1 if signal_tracker >= 0 else 1 
         sell_threshold += 3
         buy_threshold += 1
-    elif slope <= -0.055:
+      
+    elif slope <= -0.055 and roc <= 0:
         buy_threshold -= 2
+        signal_tracker = signal_tracker - 1 if signal_tracker <= 0 else -1 
     else:
-        max_pos = 25
+        signal_tracker = 0
+        max_pos = 40
         sell_threshold += 1
         buy_threshold -= 1
 
@@ -158,7 +166,7 @@ def KELP_MM(state):
     print("ORDERS:", orders)
 
     
-    return orders, f"{",".join(kept_data)};{slope}"
+    return orders, f"{",".join(kept_data)};{slope};{signal_tracker}"
 
 
 class Trader:
@@ -246,7 +254,7 @@ if __name__ == "__main__":
     }
 
     observations = {}
-    traderData = "50,60,60,70,80,90,100,100,110,120;4"
+    traderData = "50,60,60,70,80,90,100,100,110,120;4;1"
 
     s = TradingState(
         traderData,
