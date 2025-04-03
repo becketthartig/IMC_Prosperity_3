@@ -123,6 +123,8 @@ def plot_lists(actual, predicted, title="Actual vs Predicted Prices"):
     plt.figure(figsize=(10, 5))
     plt.plot(actual, label="Actual", marker="o", linestyle="-")
     plt.plot(predicted, label="Predicted", marker="s", linestyle="--")
+    residuals = np.array(hist) - np.array(predicted_prices)[4:]
+    plt.plot(residuals)
     
     plt.xlabel("Time / Index")
     plt.ylabel("Price")
