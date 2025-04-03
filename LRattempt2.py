@@ -108,4 +108,35 @@ for i in range(1, len(best_theta)):
 print("\nBest Linear Regression Equation:")
 print(equation)
 
-print(hist)
+
+import matplotlib.pyplot as plt
+
+def plot_lists(actual, predicted, title="Actual vs Predicted Prices"):
+    """
+    Plots two lists for comparison.
+    
+    Parameters:
+    - actual: List of actual values (ground truth)
+    - predicted: List of predicted values (model output)
+    - title: Title of the plot (optional)
+    """
+    plt.figure(figsize=(10, 5))
+    plt.plot(actual, label="Actual", marker="o", linestyle="-")
+    plt.plot(predicted, label="Predicted", marker="s", linestyle="--")
+    
+    plt.xlabel("Time / Index")
+    plt.ylabel("Price")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+
+
+predicted_prices = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+for i in range(11, len(hist) - 1):
+    predicted_prices.append(16.18619 + (-0.02505 * hist[i-11]) + (0.00023 * hist[i-10]) + (0.00807 * hist[i-9]) + (-0.00813 * hist[i-8]) + (0.00090 * hist[i-7]) + (0.04020 * hist[i-6]) + (0.04369 * hist[i-5]) + (0.06814 * hist[i-4]) + (0.11493 * hist[i-3]) + (0.11367 * hist[i-2]) + (0.25151 * hist[i-1]) + (0.38380 * hist[i]))
+
+plot_lists(hist, predicted_prices)
