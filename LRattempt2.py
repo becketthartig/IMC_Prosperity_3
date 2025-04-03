@@ -91,7 +91,7 @@ def train_and_evaluate(prices, max_lag, test_ratio=0.2):
 
 # Example Usage
 # prices = np.array([100.1, 100.2, 100.15, 100.25, 100.3, 100.35, 100.4, 100.45, 100.5, 100.55, 100.6, 100.65])
-max_lag = 20
+max_lag = 4
 
 mse_results, best_lag, best_theta = train_and_evaluate(p, max_lag)
 
@@ -111,7 +111,7 @@ print(equation)
 
 import matplotlib.pyplot as plt
 
-def plot_lists(actual, predicted, title="Actual vs Predicted Prices"):
+def plot_lists(actual, predicted, p2, title="Actual vs Predicted Prices"):
     """
     Plots two lists for comparison.
     
@@ -123,8 +123,7 @@ def plot_lists(actual, predicted, title="Actual vs Predicted Prices"):
     plt.figure(figsize=(10, 5))
     plt.plot(actual, label="Actual", marker="o", linestyle="-")
     plt.plot(predicted, label="Predicted", marker="s", linestyle="--")
-    residuals = np.array(hist) - np.array(predicted_prices)[4:]
-    plt.plot(residuals)
+    plt.plot(p2, label="p2", marker="s", linestyle="--")
     
     plt.xlabel("Time / Index")
     plt.ylabel("Price")
@@ -137,8 +136,11 @@ def plot_lists(actual, predicted, title="Actual vs Predicted Prices"):
 
 
 predicted_prices = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+predicted_prices2 = [0, 0, 0, 0, 0]
 
-for i in range(11, len(hist) - 1):
-    predicted_prices.append(16.18619 + (-0.02505 * hist[i-11]) + (0.00023 * hist[i-10]) + (0.00807 * hist[i-9]) + (-0.00813 * hist[i-8]) + (0.00090 * hist[i-7]) + (0.04020 * hist[i-6]) + (0.04369 * hist[i-5]) + (0.06814 * hist[i-4]) + (0.11493 * hist[i-3]) + (0.11367 * hist[i-2]) + (0.25151 * hist[i-1]) + (0.38380 * hist[i]))
+for i in range(4, len(hist) - 1):
+    predicted_prices2.append(17.45335 + (0.09147 * hist[i-4]) + (0.12850 * hist[i-3]) + (0.12096 * hist[i-2]) + (0.25920 * hist[i-1]) + (0.39122 * hist[i]))
+    if i >= 11:
+        predicted_prices.append(16.18619 + (-0.02505 * hist[i-11]) + (0.00023 * hist[i-10]) + (0.00807 * hist[i-9]) + (-0.00813 * hist[i-8]) + (0.00090 * hist[i-7]) + (0.04020 * hist[i-6]) + (0.04369 * hist[i-5]) + (0.06814 * hist[i-4]) + (0.11493 * hist[i-3]) + (0.11367 * hist[i-2]) + (0.25151 * hist[i-1]) + (0.38380 * hist[i]))
 
-plot_lists(hist, predicted_prices)
+plot_lists(hist, predicted_prices, predicted_prices2)
