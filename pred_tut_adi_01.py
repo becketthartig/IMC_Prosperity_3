@@ -11,28 +11,46 @@ def KELP_MM(state):
     outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
     outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
 
-    mid = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
+    # mid = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
+
+    mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2 # stopped rounding
     
-    max_lag = 12
+    max_lag = 4
     mid_prices = [mid]
     
+    # if state.traderData:
+    #     all_data = state.traderData.split(",")
+    #     if len(all_data) >= max_lag:
+    #         all_data = all_data[-(max_lag - 1):]
+    #     mid_prices = list(map(int, all_data)) + [mid]
+
     if state.traderData:
         all_data = state.traderData.split(",")
         if len(all_data) >= max_lag:
             all_data = all_data[-(max_lag - 1):]
-        mid_prices = list(map(int, all_data)) + [mid]
+        mid_prices = list(map(float, all_data)) + [mid] # changed to float from int
 
     theta = [16.18619, -0.02505, 0.00023, 0.00807, -0.00813, 0.00090, 0.04020, 0.04369, 0.06814, 0.11493, 0.11367, 0.25151, 0.38380]
-    
-    predicted = theta[0]
-    for i in range(1, len(theta)):
+
+    theta5 = [17.45335, 0.09147, 0.12850, 0.12096, 0.25920, 0.39122]
+
+    theta4 = [18.40810, 0.16527, 0.14608, 0.27305, 0.40648]
+    # theta4r = [22.97906, 0.15426, 0.16942, 0.27375, 0.39118]
+    # theta4r2 = [15.34356, 0.15184, 0.15857, 0.29516, 0.38680]
+
+    print(mid_prices)
+
+    predicted = theta4[0]
+    for i in range(1, len(theta4)):
         if i <= len(mid_prices):
-            predicted += theta[i] * mid_prices[-i]
+            predicted += theta4[i] * mid_prices[-i]
 
     center = mid
     
     sell_threshold = round(predicted + 1)
     buy_threshold = round(predicted - 1)
+
+    print(f"Here::0::0::{rr_vol}::{predicted}::0::Here")
 
 
     short_q = 50 + rr_vol

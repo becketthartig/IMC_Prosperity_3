@@ -16,6 +16,7 @@ with open('minor_tools/prices_round_0_day_-1.csv', 'r') as file:
 
 # Example list of historical prices (replace this with actual game data)
 p = np.array(hist)
+
 def train_and_evaluate(prices, max_lag, test_ratio=0.2):
     """
     Finds the optimal lag value while checking for overfitting.
@@ -135,12 +136,30 @@ def plot_lists(actual, predicted, p2, title="Actual vs Predicted Prices"):
 
 
 
-predicted_prices = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-predicted_prices2 = [0, 0, 0, 0, 0]
+predicted_prices = [0, 0, 0, 0]
+predicted_prices2 = [0, 0, 0, 0]
 
-for i in range(4, len(hist) - 1):
-    predicted_prices2.append(17.45335 + (0.09147 * hist[i-4]) + (0.12850 * hist[i-3]) + (0.12096 * hist[i-2]) + (0.25920 * hist[i-1]) + (0.39122 * hist[i]))
-    if i >= 11:
-        predicted_prices.append(16.18619 + (-0.02505 * hist[i-11]) + (0.00023 * hist[i-10]) + (0.00807 * hist[i-9]) + (-0.00813 * hist[i-8]) + (0.00090 * hist[i-7]) + (0.04020 * hist[i-6]) + (0.04369 * hist[i-5]) + (0.06814 * hist[i-4]) + (0.11493 * hist[i-3]) + (0.11367 * hist[i-2]) + (0.25151 * hist[i-1]) + (0.38380 * hist[i]))
+for i in range(3, len(hist) - 1):
+    predicted_prices.append(18.40810 + (0.16527 * hist[i-3]) + (0.14608 * hist[i-2]) + (0.27305 * hist[i-1]) + (0.40648 * hist[i]))
+    predicted_prices2.append(18.40810 + (0.16527 * hist[i-2]) + (0.14608 * hist[i-1]) + (0.27305 * hist[i]) + (0.40648 * predicted_prices[i+1]))
 
-plot_lists(hist, predicted_prices, predicted_prices2)
+
+
+def mean_squared_error(actual, predicted):
+    """
+    Computes the Mean Squared Error (MSE) between two lists or NumPy arrays.
+
+    Parameters:
+    - actual: List or NumPy array of actual values.
+    - predicted: List or NumPy array of predicted values.
+
+    Returns:
+    - MSE (float)
+    """
+    actual, predicted = np.array(actual), np.array(predicted)
+    return np.mean((actual - predicted) ** 2)
+
+print(mean_squared_error(hist[4:], predicted_prices[4:]))
+print(mean_squared_error(hist[4:], predicted_prices2[4:]))
+
+plot_lists([round(h) for h in hist], predicted_prices, predicted_prices2)
