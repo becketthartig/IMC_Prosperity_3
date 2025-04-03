@@ -7,7 +7,7 @@ list6 = []
 list7 = []
 list8 = []
 
-with open("/Users/becketthartig/dev/P3 - Literal Zero/nomoney9.txt", "r") as file:
+with open("nomoney13.txt", "r") as file:
 
     # sm = 0
     # div = 0
@@ -93,7 +93,7 @@ def plot_three_lists(list1, list2, list3):
     plt.plot(list6, label="limit", color='black')
     plt.plot(list5, label="limit", color='black')
     plt.plot(list4, label="limit", color='black')
-    plt.plot(list8, label="test", color='cyan')
+    # plt.plot(list8, label="test", color='cyan')
     plt.plot(list1, label="linear regression", color='b')
     plt.plot(list2, label="mid price", color='g')
     plt.plot(list3, label="position", color='r')
@@ -126,9 +126,12 @@ def plot_colored_points(values, binary_labels, y_values):
     plt.title("Number Line with Y Values from Third List")
     plt.show()
 
-plot_colored_points(list1, list8, list7)
+# plot_colored_points(list1, list8, list7)
 
-# plot_three_lists(list1, list2, list3)
+# print(max(list1) / 20)
+# print(sorted([l / 20 if l / 20 > 0.1 else 0 for l in list1]))
+
+plot_three_lists(list1, list2, list3)
 
 
 

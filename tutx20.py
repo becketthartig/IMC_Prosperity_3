@@ -1,6 +1,113 @@
-from datamodel import OrderDepth, UserId, TradingState, Order, Trade, Listing
+from datamodel import OrderDepth, UserId, TradingState, Order, Trade, Listing, Symbol
 import math
 import numpy as np
+from abc import abstractmethod
+
+
+class Strategy:
+    def __init__(self, symbol: str, limit: int) -> None:
+        self.symbol = symbol
+        self.limit = limit
+
+    @abstractmethod
+    def act(self, state: TradingState) -> None:
+        raise NotImplementedError()
+
+    def run(self, state: TradingState) -> list[Order]:
+        self.orders = []
+        self.act(state)
+        return self.orders
+
+    def buy(self, price: int, quantity: int) -> None:
+        self.orders.append(Order(self.symbol, price, quantity))
+
+    def sell(self, price: int, quantity: int) -> None:
+        self.orders.append(Order(self.symbol, price, -quantity))
+
+
+class MarketMakingStrategy(Strategy):
+    def __init__(self, symbol: Symbol, limit: int) -> None:
+        super().__init__(symbol, limit)
+
+        # self.window = deque()
+        self.window_size = 10
+
+    @abstractmethod
+    def get_true_value(state: TradingState) -> int:
+        raise NotImplementedError()
+
+    def act(self, state: TradingState) -> None:
+        true_value = self.get_true_value(state)
+
+        order_depth = state.order_depths[self.symbol]
+        buy_orders = sorted(order_depth.buy_orders.items(), reverse=True)
+        sell_orders = sorted(order_depth.sell_orders.items())
+
+        position = state.position.get(self.symbol, 0)
+        to_buy = self.limit - position
+        to_sell = self.limit + position
+
+        max_buy_price = true_value - 1 if position > self.limit * 0.5 else true_value
+        min_sell_price = true_value + 1 if position < self.limit * -0.5 else true_value
+
+        for price, volume in sell_orders:
+            if to_buy > 0 and price <= max_buy_price:
+                quantity = min(to_buy, -volume)
+                self.buy(price, quantity)
+                to_buy -= quantity
+
+        # if to_buy > 0 and hard_liquidate:
+        #     quantity = to_buy // 2
+        #     self.buy(true_value, quantity)
+        #     to_buy -= quantity
+
+        # if to_buy > 0 and soft_liquidate:
+        #     quantity = to_buy // 2
+        #     self.buy(true_value - 2, quantity)
+        #     to_buy -= quantity
+
+        if to_buy > 0:
+            popular_buy_price = max(buy_orders, key=lambda tup: tup[1])[0]
+            price = min(max_buy_price, popular_buy_price + 1)
+            self.buy(price, to_buy)
+
+        for price, volume in buy_orders:
+            if to_sell > 0 and price >= min_sell_price:
+                quantity = min(to_sell, volume)
+                self.sell(price, quantity)
+                to_sell -= quantity
+
+        # if to_sell > 0 and hard_liquidate:
+        #     quantity = to_sell // 2
+        #     self.sell(true_value, quantity)
+        #     to_sell -= quantity
+
+        # if to_sell > 0 and soft_liquidate:
+        #     quantity = to_sell // 2
+        #     self.sell(true_value + 2, quantity)
+        #     to_sell -= quantity
+
+        if to_sell > 0:
+            popular_sell_price = min(sell_orders, key=lambda tup: tup[1])[0]
+            price = max(min_sell_price, popular_sell_price - 1)
+            self.sell(price, to_sell)
+
+class AmethystsStrategy(MarketMakingStrategy):
+    def get_true_value(self, state: TradingState) -> int:
+        return 10_000
+
+class StarfruitStrategy(MarketMakingStrategy):
+    def get_true_value(self, state: TradingState) -> int:
+        order_depth = state.order_depths[self.symbol]
+
+        order_depth = state.order_depths[self.symbol]
+        buy_orders = sorted(order_depth.buy_orders.items(), reverse=True)
+        sell_orders = sorted(order_depth.sell_orders.items())
+
+        popular_buy_price = max(buy_orders, key=lambda tup: tup[1])[0]
+        popular_sell_price = min(sell_orders, key=lambda tup: tup[1])[0]
+
+        return round((popular_buy_price + popular_sell_price) / 2)
 
 def RAINFOREST_RESIN_MM(state):
 
@@ -56,7 +163,7 @@ def KELP_MM(state):
     outstanding_asks = sorted(list(outstanding.sell_orders.keys())) # trying to sell at
 
     # center = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
-    center = (outstanding_bids[-1] + outstanding_asks[0]) // 2 
+    center = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
 
     kept_data = [str(center)]
     fkept_data = [center]
@@ -84,41 +191,26 @@ def KELP_MM(state):
 
 
 
-    sell_threshold = center
-    buy_threshold = center
-    # if slope > 0.05:
-    #     sell_threshold += 2
-    # elif slope < -0.05:
-    #     buy_threshold -= 2
-    # else:
-    #     sell_threshold += 1
-    #     buy_threshold -= 1
+    # sell_threshold = center + 1
+    # buy_threshold = center - 1
+
+    spread = 2 #+ abs(slope) * 20  # Wider spread if slope is high
+    sell_threshold = center + spread // 2
+    buy_threshold = center - spread // 2
+
+    if slope > 0.055:  # Uptrend
+        buy_threshold -= 1  # Buy more aggressively
+        sell_threshold += 2  # Sell more conservatively
+    elif slope < -0.055:  # Downtrend
+        buy_threshold -= 2  # Buy more conservatively
+        sell_threshold += 1 
+
+    if slope > 0 and rr_vol < 0:  # Market is rising, you're net short -> start covering
+        buy_threshold += 1
+    elif slope < 0 and rr_vol > 0:  # Market is falling, you're net long -> sell quicker
+        sell_threshold -= 1
 
     max_pos = 50
-    if roc >= 0.0125 and slope >= 0:
-        signal_tracker = signal_tracker + 1 if signal_tracker >= 0 else 1 
-        sell_threshold += 3
-        buy_threshold += 1
-    elif roc <= -0.0125  and slope <= 0:
-        buy_threshold -= 2
-        signal_tracker = signal_tracker - 1 if signal_tracker <= 0 else -1 
-    elif slope >= 0.055 and roc >= 0:
-        signal_tracker = signal_tracker + 1 if signal_tracker >= 0 else 1 
-        sell_threshold += 3
-        buy_threshold += 1
-      
-    elif slope <= -0.055 and roc <= 0:
-        buy_threshold -= 2
-        signal_tracker = signal_tracker - 1 if signal_tracker <= 0 else -1 
-    else:
-        signal_tracker = 0
-        max_pos = 40
-        sell_threshold += 1
-        buy_threshold -= 1
-
-    # if slope > 0:
-    #     sell_threshold += 1
-    #     buy_threshold += 1
 
 
     sell_threshold = int(round(sell_threshold))  # Ensure integer price
@@ -152,6 +244,7 @@ def KELP_MM(state):
             long_q -= outstanding.sell_orders[k]
         
     if long_q < 0:
+
         orders.append(Order("KELP", 
                             min(max(outstanding_bids) + 1, buy_threshold), 
                             -long_q))
@@ -176,12 +269,16 @@ class Trader:
         orders = {}
 
 
+        ks = StarfruitStrategy("KELP", 50)
+
         # orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
         
-        orders["KELP"], kd = KELP_MM(state)
+        # orders["KELP"], kd = KELP_MM(state)
         
+        orders["KELP"] = ks.run(state)
 
-        return orders, 0, kd
+        # return orders, 0, kd
+        return orders, 0, "j"
     
 
 
