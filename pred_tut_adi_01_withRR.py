@@ -42,79 +42,101 @@ def RAINFOREST_RESIN_MM(state):
             
     return orders
 
-def KELP_MM(state):
 
+
+def KELP_MM(state):
+    
     orders = []
 
     rr_vol = state.position.get("KELP", 0)
     outstanding = state.order_depths["KELP"]
 
-    outstanding_bids = sorted(list(outstanding.buy_orders.keys())) # trying to buy at
-    outstanding_asks = sorted(list(outstanding.sell_orders.keys())) # trying to sell at
+    outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
+    outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
 
-    center = round(outstanding_bids[-1] + outstanding_asks[0]) / 2
+    # mid = round((outstanding_bids[-1] + outstanding_asks[0]) / 2)
+
+    mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2 # stopped rounding
     
-    sell_threshold = center + 1
-    buy_threshold = center - 1
+    max_lag = 4
+    mid_prices = [mid]
+    
+    # if state.traderData:
+    #     all_data = state.traderData.split(",")
+    #     if len(all_data) >= max_lag:
+    #         all_data = all_data[-(max_lag - 1):]
+    #     mid_prices = list(map(int, all_data)) + [mid]
+
+    if state.traderData:
+        all_data = state.traderData.split(",")
+        if len(all_data) >= max_lag:
+            all_data = all_data[-(max_lag - 1):]
+        mid_prices = list(map(float, all_data)) + [mid] # changed to float from int
+
+    theta = [16.18619, -0.02505, 0.00023, 0.00807, -0.00813, 0.00090, 0.04020, 0.04369, 0.06814, 0.11493, 0.11367, 0.25151, 0.38380]
+
+    theta5 = [17.45335, 0.09147, 0.12850, 0.12096, 0.25920, 0.39122]
+
+    theta4 = [18.40810, 0.16527, 0.14608, 0.27305, 0.40648]
+    # theta4r = [22.97906, 0.15426, 0.16942, 0.27375, 0.39118]
+    # theta4r2 = [15.34356, 0.15184, 0.15857, 0.29516, 0.38680]
+
+    print(mid_prices)
+
+    predicted = mid
+    if len(mid_prices) == 4:
+        predicted = theta4[0]
+        for i in range(1, len(theta4)):
+            if i <= len(mid_prices):
+                predicted += theta4[i] * mid_prices[-i]
+
+    center = mid
+    
+    sell_threshold = round(predicted + 1)
+    buy_threshold = round(predicted - 1)
+
+    print(f"Here::0::0::{rr_vol}::{predicted}::0::Here")
+
 
     short_q = 50 + rr_vol
     for k in outstanding_bids[::-1]:
         if k >= sell_threshold and short_q > 0:
-            orders.append(Order("KELP", 
-                                k, 
+            orders.append(Order("KELP",
+                                k,
                                 -min(short_q, outstanding.buy_orders[k])))
             short_q -= outstanding.buy_orders[k]
 
     if short_q > 0:
-        if short_q < 25:
-            orders.append(Order("KELP", 
-                                max(min(outstanding_asks) - 1, sell_threshold + 1), 
-                                -short_q))
-        else:
-            orders.append(Order("KELP", 
-                                max(min(outstanding_asks) - 1, sell_threshold + 1), 
-                                -25))
-            orders.append(Order("KELP", 
-                                max(min(outstanding_asks) - 1, sell_threshold), 
-                                25 - short_q))
+        orders.append(Order("KELP",
+                            max(min(outstanding_asks) - 1, sell_threshold),
+                            -short_q))
 
     long_q = rr_vol - 50
     for k in outstanding_asks:
         if k <= buy_threshold and long_q < 0:
-            orders.append(Order("KELP", 
-                                k, 
+            orders.append(Order("KELP",
+                                k,
                                 -max(long_q, outstanding.sell_orders[k])))
             long_q -= outstanding.sell_orders[k]
-        
+
     if long_q < 0:
-        
-        if long_q > -25:
-            orders.append(Order("KELP", 
-                                min(max(outstanding_bids) + 1, buy_threshold - 1), 
-                                -long_q))
-        else:
-            orders.append(Order("KELP", 
-                                min(max(outstanding_bids) + 1, buy_threshold - 1), 
-                                25))
-            orders.append(Order("KELP", 
-                                min(max(outstanding_bids) + 1, buy_threshold), 
-                                -25 - long_q))
-            
-    return orders
+        orders.append(Order("KELP",
+                            min(max(outstanding_bids) + 1, buy_threshold),
+                            -long_q))
+
+    updated_data = ",".join(map(str, mid_prices[-max_lag:]))
+    return orders, updated_data
 
 
 class Trader:
-
     def run(self, state: TradingState):
 
         orders = {}
 
         # orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
-        
-        orders["KELP"] = KELP_MM(state)
+        orders["KELP"], trader_data = KELP_MM(state)
 
-        return orders, 0, "Hello"
-    
+        return orders, 0, trader_data
 
 
 if __name__ == "__main__":
