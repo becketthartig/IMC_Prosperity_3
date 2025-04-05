@@ -7,7 +7,7 @@ list6 = []
 list7 = []
 list8 = []
 
-with open("moneyyyy3.txt", "r") as file:
+with open("moneyyyy4.txt", "r") as file:
 
     # sm = 0
     # div = 0

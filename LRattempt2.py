@@ -122,9 +122,9 @@ def plot_lists(actual, predicted, p2, title="Actual vs Predicted Prices"):
     - title: Title of the plot (optional)
     """
     plt.figure(figsize=(10, 5))
-    plt.plot(actual, label="Actual", marker="o", linestyle="-")
-    plt.plot(predicted, label="Predicted", marker="s", linestyle="--")
-    plt.plot(p2, label="p2", marker="s", linestyle="--")
+    plt.plot(actual, label="Actual", marker='s', linestyle="-")
+    plt.plot(predicted, label="momentum", linestyle="-")
+    plt.plot(p2, label="slope", linestyle="-")
     
     plt.xlabel("Time / Index")
     plt.ylabel("Price")
@@ -143,7 +143,11 @@ for i in range(3, len(hist) - 1):
     predicted_prices.append(18.40810 + (0.16527 * hist[i-3]) + (0.14608 * hist[i-2]) + (0.27305 * hist[i-1]) + (0.40648 * hist[i]))
     predicted_prices2.append(18.40810 + (0.16527 * hist[i-2]) + (0.14608 * hist[i-1]) + (0.27305 * hist[i]) + (0.40648 * predicted_prices[i+1]))
 
-
+def smooth_price(hist, alpha=0.2):
+    smoothed = [hist[0]]
+    for p in hist[1:]:
+        smoothed.append(alpha * p + (1 - alpha) * smoothed[-1])
+    return smoothed
 
 def mean_squared_error(actual, predicted):
     """
@@ -162,4 +166,98 @@ def mean_squared_error(actual, predicted):
 print(mean_squared_error(hist[4:], predicted_prices[4:]))
 print(mean_squared_error(hist[4:], predicted_prices2[4:]))
 
-plot_lists([round(h) for h in hist], predicted_prices, predicted_prices2)
+# plot_lists(smooth_price(hist), predicted_prices, predicted_prices2)
+
+import numpy as np
+
+def compute_momentum_series(hist, window=5, method=1, alpha=0.2, apply_volatility_filter=True):
+    """
+    Computes a momentum signal series for the given historical price list.
+    
+    Parameters:
+        hist (list of float): Historical price data.
+        window (int): Window size to calculate momentum.
+        method (int): 
+            1 = Simple diff mean
+            2 = EMA-based momentum
+            3 = Rolling linear regression slope
+            4 = Filtered momentum (standalone)
+            5 = Cumulative smoothed momentum
+        alpha (float): EMA smoothing factor (used in method 2 and 5).
+        apply_volatility_filter (bool): Whether to ignore low-signal momentum based on volatility.
+
+    Returns:
+        list of float: Momentum values per point in history.
+    """
+    n = len(hist)
+    momentum_series = []
+    cumulative_buffer = []  # for method 5
+
+    def ema(prices):
+        ema_val = prices[0]
+        for p in prices[1:]:
+            ema_val = alpha * p + (1 - alpha) * ema_val
+        return ema_val
+
+    for i in range(n):
+        if i < window:
+            momentum_series.append(0)
+            continue
+
+        window_prices = hist[i-window:i]
+
+        if method == 1:
+            mom = np.mean(np.diff(window_prices))
+
+        elif method == 2:
+            ema_now = ema(window_prices)
+            ema_prev = ema(window_prices[:-1])
+            mom = ema_now - ema_prev
+
+        elif method == 3:
+            y = np.array(window_prices)
+            x = np.arange(window)
+            A = np.vstack([x, np.ones_like(x)]).T
+            slope, _ = np.linalg.lstsq(A, y, rcond=None)[0]
+            mom = slope
+
+        elif method == 4:
+            mom = np.mean(np.diff(window_prices))
+            volatility = np.std(window_prices)
+            mom = mom if abs(mom) > 0.35 * volatility else 0
+
+        elif method == 5:
+            # Cumulative average of momentum deltas
+            recent_mom = np.mean(np.diff(window_prices))
+            cumulative_buffer.append(recent_mom)
+            if len(cumulative_buffer) > 20:
+                cumulative_buffer.pop(0)
+            mom = np.mean(cumulative_buffer)
+
+        else:
+            raise ValueError("Unsupported method. Use 1–5.")
+
+        # Apply volatility filter by default (except method 4 which already does)
+        if apply_volatility_filter and method != 4:
+            volatility = np.std(window_prices)
+            if abs(mom) < 0.5 * volatility:
+                mom = 0
+
+        momentum_series.append(mom)
+
+    # return momentum_series
+
+
+    return [m * 20 for m in momentum_series]
+
+
+
+hists = smooth_price(hist, 0.2)
+
+m1 = compute_momentum_series(hists, window=8, method=4, alpha=0.2, apply_volatility_filter=False)
+# m2 = compute_momentum_series(hists, window=15, method=3)
+# m3 = compute_momentum_series(hists, window=30, method=3)
+# combo = [m1[i] + m2[i] + m3[i] for i in range(len(hists))]
+
+plot_lists([(h - 2000) * 2 for h in hist], m1, [1.4 for _ in range(len(hists))])
+
