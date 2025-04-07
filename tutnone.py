@@ -66,7 +66,8 @@ def KELP_MM(state):
         mid_prices = [float(p) for p in state.traderData.split(",")[1 - max_lag:]] + [mid]
 
     # theta4 = [18.40810, 0.16527, 0.14608, 0.27305, 0.40648]
-    theta4 = [18.40810, 0.40648, 0.27305, 0.14608, 0.16527]
+    # theta4 = [18.40810, 0.40648, 0.27305, 0.14608, 0.16527]
+    theta4 = [2.02733, 0.33522, 0.26031, 0.20494, 0.19853]
 
     predicted = mid
     if len(mid_prices) == 4:
@@ -190,7 +191,7 @@ class Trader:
 
         orders = {}
 
-        # orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
+        orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
         orders["KELP"], trader_data = KELP_MM(state)
 
         return orders, 0, trader_data

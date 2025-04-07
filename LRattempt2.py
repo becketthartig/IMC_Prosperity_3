@@ -3,15 +3,22 @@ import csv
 
 hist = []
 
-with open('minor_tools/prices_round_0_day_-1.csv', 'r') as file:
-    csvreader = csv.reader(file)
-    li = list(csvreader)
+def read_in(p):
+    with open(p, 'r') as file:
+        csvreader = csv.reader(file)
+        li = list(csvreader)
 
 
-    for i in range(1, len(li) - 1):
-        mp = float(li[i][0].split(";")[15])
-        if mp < 9000.0:
-            hist.append(mp)
+        for i in range(1, len(li) - 1):
+            mp = float(li[i][0].split(";")[15])
+            sec = li[i][0].split(";")[2]
+
+            if sec == "KELP":
+                hist.append(mp)
+
+read_in("round-1-island-data-bottle/prices_round_1_day_-2.csv")
+read_in("round-1-island-data-bottle/prices_round_1_day_-1.csv")
+read_in("round-1-island-data-bottle/prices_round_1_day_0.csv")
             
 
 # Example list of historical prices (replace this with actual game data)
