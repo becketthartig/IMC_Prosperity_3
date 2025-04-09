@@ -9,6 +9,7 @@ def read_in(p):
         li = list(csvreader)
 
 
+<<<<<<< Updated upstream
         for i in range(1, len(li) - 1):
             mp = float(li[i][0].split(";")[15])
             sec = li[i][0].split(";")[2]
@@ -19,6 +20,12 @@ def read_in(p):
 read_in("round-1-island-data-bottle/prices_round_1_day_-2.csv")
 read_in("round-1-island-data-bottle/prices_round_1_day_-1.csv")
 read_in("round-1-island-data-bottle/prices_round_1_day_0.csv")
+=======
+    for i in range(1, len(li) - 1):
+        mp = float(li[i][0].split(";")[15])
+        if mp > 9000.0:
+            hist.append(mp)
+>>>>>>> Stashed changes
             
 
 # Example list of historical prices (replace this with actual game data)
