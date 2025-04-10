@@ -1,7 +1,5 @@
-from datamodel import OrderDepth, UserId, TradingState, Order, Trade, Listing
+from datamodel import OrderDepth, TradingState, Order, Trade, Listing
 import math
-import numpy as np
-import collections
 
 def RAINFOREST_RESIN_MM(state):
 
@@ -10,8 +8,8 @@ def RAINFOREST_RESIN_MM(state):
     rr_vol = state.position.get("RAINFOREST_RESIN", 0)
     outstanding = state.order_depths["RAINFOREST_RESIN"]
 
-    outstanding_bids = sorted(list(outstanding.buy_orders.keys())) # trying to buy at
-    outstanding_asks = sorted(list(outstanding.sell_orders.keys())) # trying to sell at
+    outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
+    outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
     
     sell_threshold = 10001
     buy_threshold = 9999
@@ -46,11 +44,11 @@ def RAINFOREST_RESIN_MM(state):
 
 
 
-def KELP_MM(state):
+def KELP_MM(state, kelp_traderData):
     
     orders = []
 
-    rr_vol = state.position.get("KELP", 0)
+    k_vol = state.position.get("KELP", 0)
     outstanding = state.order_depths["KELP"]
 
     outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
@@ -59,11 +57,7 @@ def KELP_MM(state):
     mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
     
     max_lag = 4
-    mid_prices = [mid]
-
-
-    if state.traderData:
-        mid_prices = [float(p) for p in state.traderData.split(",")[1 - max_lag:]] + [mid]
+    mid_prices = [float(p) for p in kelp_traderData.split(",")[1 - max_lag:]] + [mid] if kelp_traderData else [mid]
 
     # theta4 = [18.40810, 0.16527, 0.14608, 0.27305, 0.40648]
     # theta4 = [18.40810, 0.40648, 0.27305, 0.14608, 0.16527]
@@ -76,15 +70,13 @@ def KELP_MM(state):
             if i <= len(mid_prices):
                 predicted += theta4[i] * mid_prices[-i]
 
-    print(f"Here::0::0::{rr_vol}::{predicted}::0::Here")
-
     center = round(predicted)
 
 
     sell_threshold = center + 1
     buy_threshold = center - 1
     
-    short_q = 50 + rr_vol
+    short_q = 50 + k_vol
     for k in outstanding_bids[::-1]:
         if k >= sell_threshold and short_q > 0:
             orders.append(Order("KELP",
@@ -97,7 +89,7 @@ def KELP_MM(state):
                             max(min(outstanding_asks) - 1, sell_threshold),
                             -short_q))
 
-    long_q = rr_vol - 50
+    long_q = k_vol - 50
     for k in outstanding_asks:
         if k <= buy_threshold and long_q < 0:
             orders.append(Order("KELP",
@@ -110,17 +102,9 @@ def KELP_MM(state):
                             min(max(outstanding_bids) + 1, buy_threshold),
                             -long_q))
 
-    updated_data = ",".join(map(str, mid_prices))
+    return orders, ",".join(map(str, mid_prices))
 
-    return orders, updated_data
 
-<<<<<<< HEAD:tutnone.py
-    # product = "KELP"
-
-    # soft_thresh = 40
-    # hard_thresh = 45
-    # position_limit = 50
-=======
 # Stateless function to calulate z-score for a rolling window
 def rolling_zscore_tick(state_str, new_price, window):
     if state_str:
@@ -136,46 +120,12 @@ def rolling_zscore_tick(state_str, new_price, window):
     prices.append(new_price)
     sum_x += new_price
     sum_x2 += new_price ** 2
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
 
-    # # Adjust thresholds based on position
-    # if abs(rr_vol) >= hard_thresh:
-    #     # Hard liquidation mode
-    #     if rr_vol > 0:
-    #         # Sell aggressively
-    #         for k in outstanding_bids[::-1]:
-    #             orders.append(Order(product, k, -min(rr_vol, outstanding.buy_orders[k])))
-    #             rr_vol -= min(rr_vol, outstanding.buy_orders[k])
-    #             if rr_vol <= 0:
-    #                 break
-    #         if rr_vol > 0:
-    #             orders.append(Order(product, outstanding_asks[0], -rr_vol))  # Cross ask
-    #     elif rr_vol < 0:
-    #         # Buy aggressively
-    #         for k in outstanding_asks:
-    #             orders.append(Order(product, k, -max(rr_vol, -outstanding.sell_orders[k])))
-    #             rr_vol += min(-rr_vol, outstanding.sell_orders[k])
-    #             if rr_vol >= 0:
-    #                 break
-    #         if rr_vol < 0:
-    #             orders.append(Order(product, outstanding_bids[-1], -rr_vol))  # Cross bid
+    if len(prices) > window:
+        old_price = prices.pop(0)
+        sum_x -= old_price
+        sum_x2 -= old_price ** 2
 
-<<<<<<< HEAD:tutnone.py
-    # else:
-    #     # Normal market making mode with soft liquidation skew
-    #     # Skew prices based on position
-    #     buy_skew = 0
-    #     sell_skew = 0
-
-    #     if rr_vol >= soft_thresh:
-    #         # Soft liquidation: sell more aggressively
-    #         sell_skew = -1
-    #         buy_skew = -1
-    #     elif rr_vol <= -soft_thresh:
-    #         # Soft liquidation: buy more aggressively
-    #         sell_skew = 1
-    #         buy_skew = 1
-=======
     if len(prices) == window:
         mean = sum_x / window
         variance = (sum_x2 - (sum_x ** 2) / window) / window
@@ -186,38 +136,24 @@ def rolling_zscore_tick(state_str, new_price, window):
         z_score = 0
     
     return ",".join(map(str, prices + [sum_x, sum_x2])), mean, z_score
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
 
-    #     sell_threshold = center + 1 + sell_skew
-    #     buy_threshold = center - 1 + buy_skew
 
-    #     short_q = position_limit + rr_vol
-    #     for k in outstanding_bids[::-1]:
-    #         if k >= sell_threshold and short_q > 0:
-    #             orders.append(Order(product, k, -min(short_q, outstanding.buy_orders[k])))
-    #             short_q -= outstanding.buy_orders[k]
+def SQUID_INK_MM(state, squid_ink_traderData):
 
-    #     if short_q > 0:
-    #         orders.append(Order(product,
-    #                             max(min(outstanding_asks) - 1, sell_threshold),
-    #                             -short_q))
+    orders = []
+    
+    si_vol = state.position.get("SQUID_INK", 0)
+    outstanding = state.order_depths["SQUID_INK"]
 
-    #     long_q = rr_vol - position_limit
-    #     for k in outstanding_asks:
-    #         if k <= buy_threshold and long_q < 0:
-    #             orders.append(Order(product, k, -max(long_q, outstanding.sell_orders[k])))
-    #             long_q -= outstanding.sell_orders[k]
+    outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
+    outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
 
-    #     if long_q < 0:
-    #         orders.append(Order(product,
-    #                             min(max(outstanding_bids) + 1, buy_threshold),
-    #                             -long_q))
+    mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
 
-    # updated_data = ",".join(map(str, mid_prices))
-    # return orders, updated_data
+    max_lag = 250
+    # mid_prices = [float(p) for p in squid_ink_traderData.split(",")[1 - max_lag:]] + [mid] if squid_ink_traderData else [mid]
+    # print(mid_prices)
 
-<<<<<<< HEAD:tutnone.py
-=======
     updated_squid_ink_traderData, mean, z_score = rolling_zscore_tick(squid_ink_traderData, mid, max_lag)
     print(z_score, state.timestamp)
 
@@ -262,7 +198,6 @@ def rolling_zscore_tick(state_str, new_price, window):
                             -long_q))
             
     return orders, updated_squid_ink_traderData #",".join(map(str, mid_prices))
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
 
 class Trader:
 
@@ -270,17 +205,16 @@ class Trader:
 
         orders = {}
 
-<<<<<<< HEAD:tutnone.py
-=======
         # Sepparate feeds for kelp and squid ink data
         all_traderData = state.traderData.split(";") if state.traderData else ["", ""]
 
 
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
         orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
-        orders["KELP"], trader_data = KELP_MM(state)
+        orders["KELP"], kelp_traderData = KELP_MM(state, all_traderData[0])
+        orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
 
-        return orders, 0, trader_data
+
+        return orders, 0, kelp_traderData + ";" + squid_ink_traderData
 
 
 if __name__ == "__main__":
