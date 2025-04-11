@@ -9,7 +9,6 @@ def read_in(p):
         li = list(csvreader)
 
 
-<<<<<<< Updated upstream
         for i in range(1, len(li) - 1):
             mp = float(li[i][0].split(";")[15])
             sec = li[i][0].split(";")[2]
@@ -17,15 +16,10 @@ def read_in(p):
             if sec == "KELP":
                 hist.append(mp)
 
-read_in("round-1-island-data-bottle/prices_round_1_day_-2.csv")
-read_in("round-1-island-data-bottle/prices_round_1_day_-1.csv")
-read_in("round-1-island-data-bottle/prices_round_1_day_0.csv")
-=======
-    for i in range(1, len(li) - 1):
-        mp = float(li[i][0].split(";")[15])
-        if mp > 9000.0:
-            hist.append(mp)
->>>>>>> Stashed changes
+read_in("data/round1/prices_round_1_day_-2.csv")
+read_in("data/round1/prices_round_1_day_-1.csv")
+read_in("data/round1/prices_round_1_day_0.csv")
+read_in("486adaf8-328b-48e7-be24-7422e9532c06.csv")
             
 
 # Example list of historical prices (replace this with actual game data)
@@ -180,7 +174,7 @@ def mean_squared_error(actual, predicted):
 print(mean_squared_error(hist[4:], predicted_prices[4:]))
 print(mean_squared_error(hist[4:], predicted_prices2[4:]))
 
-# plot_lists(smooth_price(hist), predicted_prices, predicted_prices2)
+plot_lists(hist, predicted_prices, predicted_prices2)
 
 import numpy as np
 
@@ -273,5 +267,5 @@ m1 = compute_momentum_series(hists, window=8, method=4, alpha=0.2, apply_volatil
 # m3 = compute_momentum_series(hists, window=30, method=3)
 # combo = [m1[i] + m2[i] + m3[i] for i in range(len(hists))]
 
-plot_lists([(h - 2000) * 2 for h in hist], m1, [1.4 for _ in range(len(hists))])
+# plot_lists([(h - 2000) * 2 for h in hist], m1, [1.4 for _ in range(len(hists))])
 

@@ -1,112 +1,214 @@
-from datamodel import OrderDepth, TradingState, Order, Trade, Listing
+from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
 import math
+from abc import ABC, abstractmethod
 
-def RAINFOREST_RESIN_MM(state):
+from typing import Any
+import json
 
-    orders = []
-    
-    rr_vol = state.position.get("RAINFOREST_RESIN", 0)
-    outstanding = state.order_depths["RAINFOREST_RESIN"]
+class Logger:
+    def __init__(self) -> None:
+        self.logs = ""
+        self.max_log_length = 3750
 
-    outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
-    outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
-    
-    sell_threshold = 10001
-    buy_threshold = 9999
+    def print(self, *objects: Any, sep: str = " ", end: str = "\n") -> None:
+        self.logs += sep.join(map(str, objects)) + end
 
-    short_q = 50 + rr_vol
-    for k in outstanding_bids[::-1]:
-        if k >= sell_threshold and short_q > 0:
-            orders.append(Order("RAINFOREST_RESIN", 
-                                k, 
-                                -min(short_q, outstanding.buy_orders[k])))
-            short_q -= outstanding.buy_orders[k]
+    def flush(self, state: TradingState, orders: dict[Symbol, list[Order]], conversions: int, trader_data: str) -> None:
+        base_length = len(
+            self.to_json(
+                [
+                    self.compress_state(state, ""),
+                    self.compress_orders(orders),
+                    conversions,
+                    "",
+                    "",
+                ]
+            )
+        )
 
-    if short_q > 0:
-        orders.append(Order("RAINFOREST_RESIN", 
-                            max(min(outstanding_asks) - 1, sell_threshold + 1), 
-                            -short_q))
+        # We truncate state.traderData, trader_data, and self.logs to the same max. length to fit the log limit
+        max_item_length = (self.max_log_length - base_length) // 3
 
-    long_q = rr_vol - 50
-    for k in outstanding_asks:
-        if k <= buy_threshold and long_q < 0:
-            orders.append(Order("RAINFOREST_RESIN", 
-                                k, 
-                                -max(long_q, outstanding.sell_orders[k])))
-            long_q -= outstanding.sell_orders[k]
+        print(
+            self.to_json(
+                [
+                    self.compress_state(state, self.truncate(state.traderData, max_item_length)),
+                    self.compress_orders(orders),
+                    conversions,
+                    self.truncate(trader_data, max_item_length),
+                    self.truncate(self.logs, max_item_length),
+                ]
+            )
+        )
+
+        self.logs = ""
+
+    def compress_state(self, state: TradingState, trader_data: str) -> list[Any]:
+        return [
+            state.timestamp,
+            trader_data,
+            self.compress_listings(state.listings),
+            self.compress_order_depths(state.order_depths),
+            self.compress_trades(state.own_trades),
+            self.compress_trades(state.market_trades),
+            state.position,
+            self.compress_observations(state.observations),
+        ]
+
+    def compress_listings(self, listings: dict[Symbol, Listing]) -> list[list[Any]]:
+        compressed = []
+        for listing in listings.values():
+            compressed.append([listing.symbol, listing.product, listing.denomination])
+
+        return compressed
+
+    def compress_order_depths(self, order_depths: dict[Symbol, OrderDepth]) -> dict[Symbol, list[Any]]:
+        compressed = {}
+        for symbol, order_depth in order_depths.items():
+            compressed[symbol] = [order_depth.buy_orders, order_depth.sell_orders]
+
+        return compressed
+
+    def compress_trades(self, trades: dict[Symbol, list[Trade]]) -> list[list[Any]]:
+        compressed = []
+        for arr in trades.values():
+            for trade in arr:
+                compressed.append(
+                    [
+                        trade.symbol,
+                        trade.price,
+                        trade.quantity,
+                        trade.buyer,
+                        trade.seller,
+                        trade.timestamp,
+                    ]
+                )
+
+        return compressed
+
+    def compress_observations(self, observations: Observation) -> list[Any]:
+        conversion_observations = {}
+        for product, observation in observations.conversionObservations.items():
+            conversion_observations[product] = [
+                observation.bidPrice,
+                observation.askPrice,
+                observation.transportFees,
+                observation.exportTariff,
+                observation.importTariff,
+                observation.sugarPrice,
+                observation.sunlightIndex,
+            ]
+
+        return [observations.plainValueObservations, conversion_observations]
+
+    def compress_orders(self, orders: dict[Symbol, list[Order]]) -> list[list[Any]]:
+        compressed = []
+        for arr in orders.values():
+            for order in arr:
+                compressed.append([order.symbol, order.price, order.quantity])
+
+        return compressed
+
+    def to_json(self, value: Any) -> str:
+        return json.dumps(value, cls=ProsperityEncoder, separators=(",", ":"))
+
+    def truncate(self, value: str, max_length: int) -> str:
+        if len(value) <= max_length:
+            return value
+
+        return value[: max_length - 3] + "..."
+
+
+logger = Logger()
+
+class BaseMarketMaker(ABC):
+    def __init__(self, state, product):
+        self.state = state
+        self.product = product
+        self.orders = []
+
+        self.position = self.state.position.get(self.product, 0)
+        self.order_depth = self.state.order_depths[self.product]
+        self.outstanding_bids = sorted(list(self.order_depth.buy_orders.keys()))
+        self.outstanding_asks = sorted(list(self.order_depth.sell_orders.keys()))
         
-    if long_q < 0:
-        orders.append(Order("RAINFOREST_RESIN", 
-                            min(max(outstanding_bids) + 1, buy_threshold - 1), 
-                            -long_q))
-            
-    return orders
+        # To be set by subclass
+        self.sell_threshold = None
+        self.buy_threshold = None
 
+    @abstractmethod
+    def compute_thresholds(self):
+        """Must set self.sell_threshold and self.buy_threshold"""
+        pass
 
+    def make_orders(self):
+        self.compute_thresholds()
 
-def KELP_MM(state, kelp_traderData):
-    
-    orders = []
+        short_q = 50 + self.position
+        for k in self.outstanding_bids[::-1]:
+            if k >= self.sell_threshold and short_q > 0:
+                self.orders.append(Order(self.product, k, -min(short_q, self.order_depth.buy_orders[k])))
+                short_q -= self.order_depth.buy_orders[k]
 
-    k_vol = state.position.get("KELP", 0)
-    outstanding = state.order_depths["KELP"]
+        if short_q > 0:
+            self.orders.append(Order(self.product,
+                                     max(min(self.outstanding_asks) - 1, self.sell_threshold + 1),
+                                     -short_q))
 
-    outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
-    outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
+        long_q = self.position - 50
+        for k in self.outstanding_asks:
+            if k <= self.buy_threshold and long_q < 0:
+                self.orders.append(Order(self.product, k, -max(long_q, self.order_depth.sell_orders[k])))
+                long_q -= self.order_depth.sell_orders[k]
 
-    mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
-    
-    max_lag = 4
-    mid_prices = [float(p) for p in kelp_traderData.split(",")[1 - max_lag:]] + [mid] if kelp_traderData else [mid]
+        if long_q < 0:
+            self.orders.append(Order(self.product,
+                                     min(max(self.outstanding_bids) + 1, self.buy_threshold - 1),
+                                     -long_q))
 
-    # theta4 = [18.40810, 0.16527, 0.14608, 0.27305, 0.40648]
-    # theta4 = [18.40810, 0.40648, 0.27305, 0.14608, 0.16527]
-    theta4 = [2.02733, 0.33522, 0.26031, 0.20494, 0.19853]
+        return self.orders
 
-    predicted = mid
-    if len(mid_prices) == 4:
+class RainforestResinMM(BaseMarketMaker):
+    def __init__(self, state):
+        super().__init__(state, "RAINFOREST_RESIN")
+
+    def compute_thresholds(self):
+        self.sell_threshold = 10001
+        self.buy_threshold = 9999
+
+class KelpMM(BaseMarketMaker):
+    def __init__(self, state, kelp_traderData):
+        super().__init__(state, "KELP")
+        self.kelp_traderData = kelp_traderData
+        self.mid_prices = []
+
+    def compute_thresholds(self):
+        mid = (self.outstanding_bids[-1] + self.outstanding_asks[0]) / 2
+
+        max_lag = 4
+        if self.kelp_traderData:
+            self.mid_prices = [float(p) for p in self.kelp_traderData.split(",")[1 - max_lag:]] + [mid]
+        else:
+            self.mid_prices = [mid]
+
+        theta4 = (2.02733, 0.33522, 0.26031, 0.20494, 0.19853)
+
         predicted = theta4[0]
         for i in range(1, len(theta4)):
-            if i <= len(mid_prices):
-                predicted += theta4[i] * mid_prices[-i]
+            if i <= len(self.mid_prices):
+                predicted += theta4[i] * self.mid_prices[-i]
 
-    center = round(predicted)
+        center = round(predicted)
+        self.sell_threshold = center + 1
+        self.buy_threshold = center - 1
 
-
-    sell_threshold = center + 1
-    buy_threshold = center - 1
-    
-    short_q = 50 + k_vol
-    for k in outstanding_bids[::-1]:
-        if k >= sell_threshold and short_q > 0:
-            orders.append(Order("KELP",
-                                k,
-                                -min(short_q, outstanding.buy_orders[k])))
-            short_q -= outstanding.buy_orders[k]
-
-    if short_q > 0:
-        orders.append(Order("KELP",
-                            max(min(outstanding_asks) - 1, sell_threshold),
-                            -short_q))
-
-    long_q = k_vol - 50
-    for k in outstanding_asks:
-        if k <= buy_threshold and long_q < 0:
-            orders.append(Order("KELP",
-                                k,
-                                -max(long_q, outstanding.sell_orders[k])))
-            long_q -= outstanding.sell_orders[k]
-
-    if long_q < 0:
-        orders.append(Order("KELP",
-                            min(max(outstanding_bids) + 1, buy_threshold),
-                            -long_q))
-
-    return orders, ",".join(map(str, mid_prices))
+    def make_orders(self):
+        orders = super().make_orders()
+        return orders, ",".join(map(str, self.mid_prices))
 
 
 # Stateless function to calulate z-score for a rolling window
-def rolling_zscore_tick(state_str, new_price, window):
+def rolling_tick(state_str, new_price, z_score_window, momentum_window, synthetic_mean=False):
     if state_str:
         state = list(map(float, state_str.split(",")))
         prices = state[:-2]
@@ -121,21 +223,26 @@ def rolling_zscore_tick(state_str, new_price, window):
     sum_x += new_price
     sum_x2 += new_price ** 2
 
-    if len(prices) > window:
+    if len(prices) > z_score_window:
         old_price = prices.pop(0)
         sum_x -= old_price
         sum_x2 -= old_price ** 2
 
-    if len(prices) == window:
-        mean = sum_x / window
-        variance = (sum_x2 - (sum_x ** 2) / window) / window
+    if len(prices) == z_score_window:
+        mean = 0 if synthetic_mean else sum_x / z_score_window
+        variance = (sum_x2 - (sum_x ** 2) / z_score_window) / z_score_window
         std = variance ** 0.5 if variance > 0 else 0
         z_score = (new_price - mean) / std if std > 0 else 0
     else:
-        mean = 0
         z_score = 0
-    
-    return ",".join(map(str, prices + [sum_x, sum_x2])), mean, z_score
+
+    if len(prices) >= momentum_window:
+        momentum = new_price - prices[-momentum_window]
+    else:
+        momentum = 0
+
+    return ",".join(map(str, prices + [sum_x, sum_x2])), z_score, momentum
+
 
 
 def SQUID_INK_MM(state, squid_ink_traderData):
@@ -143,19 +250,25 @@ def SQUID_INK_MM(state, squid_ink_traderData):
     orders = []
     
     si_vol = state.position.get("SQUID_INK", 0)
+
     outstanding = state.order_depths["SQUID_INK"]
 
     outstanding_bids = sorted(list(outstanding.buy_orders.keys()))
     outstanding_asks = sorted(list(outstanding.sell_orders.keys()))
 
     mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
+    rm = round(mid)
+    if mid != rm:
+        if si_vol > 0:
+            mid = math.floor(mid)
+        else:
+            mid = rm
 
-    max_lag = 250
-    # mid_prices = [float(p) for p in squid_ink_traderData.split(",")[1 - max_lag:]] + [mid] if squid_ink_traderData else [mid]
-    # print(mid_prices)
 
-    updated_squid_ink_traderData, mean, z_score = rolling_zscore_tick(squid_ink_traderData, mid, max_lag)
-    print(z_score, state.timestamp)
+    z_score_window = 250
+    momentum_window = 200
+
+    updated_squid_ink_traderData, z_score, momentum = rolling_tick(squid_ink_traderData, mid, z_score_window, momentum_window)
 
     center = round(mid)
 
@@ -167,9 +280,10 @@ def SQUID_INK_MM(state, squid_ink_traderData):
     if z_score > 2:
         sell_threshold -= 1
         buy_threshold -= 1
-    if z_score < -2:
+    elif z_score < -2:
         sell_threshold += 1
         buy_threshold += 1
+
 
     short_q = 50 + si_vol
     for k in outstanding_bids[::-1]:
@@ -197,7 +311,108 @@ def SQUID_INK_MM(state, squid_ink_traderData):
                             min(max(outstanding_bids) + 1, buy_threshold), 
                             -long_q))
             
-    return orders, updated_squid_ink_traderData #",".join(map(str, mid_prices))
+    return orders, updated_squid_ink_traderData
+
+# class SquidInkMM(BaseMarketMaker):
+#     def __init__(self, state, squid_ink_traderData):
+#         super().__init__(state, "SQUID_INK")
+#         self.squid_ink_traderData = squid_ink_traderData
+#         self.updated_traderData = None
+#         self.z_score = 0
+#         self.momentum = 0
+
+#     def compute_thresholds(self):
+#         mid = (self.outstanding_bids[-1] + self.outstanding_asks[0]) / 2
+#         rm = round(mid)
+
+#         if mid != rm:
+#             if self.position > 0:
+#                 mid = math.floor(mid)
+#             else:
+#                 mid = rm
+
+#         z_score_window = 250
+#         momentum_window = 200
+
+#         self.updated_traderData, self.z_score, self.momentum = rolling_tick(
+#             self.squid_ink_traderData, mid, z_score_window, momentum_window
+#         )
+
+#         center = round(mid)
+#         self.sell_threshold = center + 2
+#         self.buy_threshold = center - 2
+
+#         if self.z_score > 2:
+#             self.sell_threshold -= 1
+#             self.buy_threshold -= 1
+#         elif self.z_score < -2:
+#             self.sell_threshold += 1
+#             self.buy_threshold += 1
+
+#     def make_orders(self):
+#         orders = super().make_orders()
+#         return orders, self.updated_traderData
+
+def arb_orders_for_round_2(state, pb2_tradeData):
+
+    commodities = ("PICNIC_BASKET1", "PICNIC_BASKET2", "CROISSANTS", "JAMS", "DJEMBES")
+
+    outstanding_bids = {}
+    outstanding_asks = {}
+    mids = {}
+    vols = {}
+    for c in commodities:
+        outstanding_bids[c] = sorted(list(state.order_depths[c].buy_orders.keys()))
+        outstanding_asks[c] = sorted(list(state.order_depths[c].sell_orders.keys()))
+        mids[c] = (outstanding_bids[c][-1] + outstanding_asks[c][0]) / 2
+        vols[c] = state.position.get(c, 0)
+
+    
+    buy_threshold = 1
+    sell_threshold = 99999999
+
+    premium_pb2 = mids["PICNIC_BASKET2"] - 4 * mids["CROISSANTS"] - 2 * mids["JAMS"]
+    updated_pb2_traderData, zpb2, mpb2 = rolling_tick(pb2_tradeData, premium_pb2, 50, 5, True)
+
+
+    commodity_orders = {k: [] for k in commodities}
+
+    ENGINE_LIMITS = {"PICNIC_BASKET1": 60, "PICNIC_BASKET2": 100, "CROISSANTS": 250, "JAMS": 350, "DJEMBES": 60}
+
+
+    # short_q = 50 + si_vol
+    # for k in outstanding_bids[::-1]:
+    #     if k >= sell_threshold and short_q > 0:
+    #         orders.append(Order("SQUID_INK", 
+    #                             k, 
+    #                             -min(short_q, outstanding.buy_orders[k])))
+    #         short_q -= outstanding.buy_orders[k]
+
+    # if short_q > 0:
+    #     orders.append(Order("SQUID_INK", 
+    #                         max(min(outstanding_asks) - 1, sell_threshold), # +1 ?
+    #                         -short_q))
+
+    # long_q = si_vol - 50
+    # for k in outstanding_asks:
+    #     if k <= buy_threshold and long_q < 0:
+    #         orders.append(Order("SQUID_INK", 
+    #                             k, 
+    #                             -max(long_q, outstanding.sell_orders[k])))
+    #         long_q -= outstanding.sell_orders[k]
+        
+    # if long_q < 0:
+    #     orders.append(Order("SQUID_INK", 
+    #                         min(max(outstanding_bids) + 1, buy_threshold), # -1 ?
+    #                         -long_q))
+
+
+    return commodity_orders, updated_pb2_traderData
+
+
+
+        
+
 
 class Trader:
 
@@ -206,15 +421,27 @@ class Trader:
         orders = {}
 
         # Sepparate feeds for kelp and squid ink data
-        all_traderData = state.traderData.split(";") if state.traderData else ["", ""]
+        all_traderData = state.traderData.split(";") if state.traderData else ["", "", ""]
+
+        # orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
+        # orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
+        # orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
+
+        kelp_traderData = "ji"
+        squid_ink_traderData = "ji"
+        com_ords, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2])
+
+        for k in com_ords:
+            orders[k] = com_ords[k]
+
+        ntd = ";".join([kelp_traderData, squid_ink_traderData, pb2_traderData])
+
+        logger.flush(state, orders, 0, ntd)
+
+        # print(orders, state.order_depths["PICNIC_BASKET2"].sell_orders)
 
 
-        orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
-        orders["KELP"], kelp_traderData = KELP_MM(state, all_traderData[0])
-        orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
-
-
-        return orders, 0, kelp_traderData + ";" + squid_ink_traderData
+        return orders, 0, ";".join([kelp_traderData, squid_ink_traderData, pb2_traderData])
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ list6 = []
 list7 = []
 list8 = []
 
-with open("moneyyyy4.txt", "r") as file:
+with open("backtests/recent.txt", "r") as file:
 
     # sm = 0
     # div = 0
@@ -23,6 +23,7 @@ with open("moneyyyy4.txt", "r") as file:
             list7.append(roc * 80)
             list1.append(s * 20)
             list2.append((float(vals[-3]) - 2010) * 2)
+            # list2.append(float(vals[-3]))
             list3.append(float(vals[-4]) / 2)
             list4.append(0)
             list5.append(0.055 * 20)
@@ -82,6 +83,23 @@ with open("moneyyyy4.txt", "r") as file:
 
     # print(sm / div)
     # print(mx)
+
+list1 = []
+import csv
+def read_in(p):
+    with open(p, 'r') as file:
+        csvreader = csv.reader(file)
+        li = list(csvreader)
+
+
+        for i in range(1, len(li) - 1):
+            mp = float(li[i][0].split(";")[16]) / 40
+            sec = li[i][0].split(";")[2]
+
+            if sec == "SQUID_INK":
+                list1.append(mp)
+
+read_in("shit.csv")
 
 
 import matplotlib.pyplot as plt
