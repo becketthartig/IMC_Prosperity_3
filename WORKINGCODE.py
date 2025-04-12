@@ -353,6 +353,37 @@ def SQUID_INK_MM(state, squid_ink_traderData):
 #         orders = super().make_orders()
 #         return orders, self.updated_traderData
 
+def ORDER_ENGINE(product, short_q, long_q, outstanding_bids, outstanding_asks, sell_threshold, buy_threshold, outstanding):
+
+    orders = []
+
+    for k in outstanding_bids[::-1]:
+        if k >= sell_threshold and short_q > 0:
+            orders.append(Order(product, 
+                                k, 
+                                -min(short_q, outstanding.buy_orders[k])))
+            short_q -= outstanding.buy_orders[k]
+
+    if short_q > 0:
+        orders.append(Order(product, 
+                            max(min(outstanding_asks) - 1, sell_threshold), # +1 ?
+                            -short_q))
+
+    for k in outstanding_asks:
+        if k <= buy_threshold and long_q < 0:
+            orders.append(Order(product, 
+                                k, 
+                                -max(long_q, outstanding.sell_orders[k])))
+            long_q -= outstanding.sell_orders[k]
+        
+    if long_q < 0:
+        orders.append(Order(product, 
+                            min(max(outstanding_bids) + 1, buy_threshold), # -1 ?
+                            -long_q))
+        
+    return orders
+
+
 def arb_orders_for_round_2(state, pb2_tradeData):
 
     commodities = ("PICNIC_BASKET1", "PICNIC_BASKET2", "CROISSANTS", "JAMS", "DJEMBES")
@@ -375,36 +406,29 @@ def arb_orders_for_round_2(state, pb2_tradeData):
     updated_pb2_traderData, zpb2, mpb2 = rolling_tick(pb2_tradeData, premium_pb2, 50, 5, True)
 
 
-    commodity_orders = {k: [] for k in commodities}
 
     ENGINE_LIMITS = {"PICNIC_BASKET1": 60, "PICNIC_BASKET2": 100, "CROISSANTS": 250, "JAMS": 350, "DJEMBES": 60}
 
 
-    # short_q = 50 + si_vol
-    # for k in outstanding_bids[::-1]:
-    #     if k >= sell_threshold and short_q > 0:
-    #         orders.append(Order("SQUID_INK", 
-    #                             k, 
-    #                             -min(short_q, outstanding.buy_orders[k])))
-    #         short_q -= outstanding.buy_orders[k]
+    commodity_orders = {}
 
-    # if short_q > 0:
-    #     orders.append(Order("SQUID_INK", 
-    #                         max(min(outstanding_asks) - 1, sell_threshold), # +1 ?
-    #                         -short_q))
 
-    # long_q = si_vol - 50
-    # for k in outstanding_asks:
-    #     if k <= buy_threshold and long_q < 0:
-    #         orders.append(Order("SQUID_INK", 
-    #                             k, 
-    #                             -max(long_q, outstanding.sell_orders[k])))
-    #         long_q -= outstanding.sell_orders[k]
-        
-    # if long_q < 0:
-    #     orders.append(Order("SQUID_INK", 
-    #                         min(max(outstanding_bids) + 1, buy_threshold), # -1 ?
-    #                         -long_q))
+    sq = 0
+    lq = 0
+    if zpb2 > 10:
+        sq = ENGINE_LIMITS["PICNIC_BASKET2"] + vols["PICNIC_BASKET2"]
+    elif zpb2 < -10:
+        lq = vols["PICNIC_BASKET2"] - ENGINE_LIMITS["PICNIC_BASKET2"]
+    elif vols["PICNIC_BASKET2"] > 0 and zpb2 > -10:
+        sq = vols["PICNIC_BASKET2"]
+    elif vols["PICNIC_BASKET2"] < 0 and zpb2 < 10:
+        lq = vols["PICNIC_BASKET2"]
+
+    commodity_orders["PICNIC_BASKET2"] = ORDER_ENGINE("PICNIC_BASKET2",
+                                                      sq, lq,
+                                                      outstanding_bids["PICNIC_BASKET2"], outstanding_asks["PICNIC_BASKET2"],
+                                                      mids["PICNIC_BASKET2"] - 1, mids["PICNIC_BASKET2"] + 1,
+                                                      state.order_depths["PICNIC_BASKET2"])
 
 
     return commodity_orders, updated_pb2_traderData
