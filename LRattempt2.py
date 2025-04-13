@@ -19,7 +19,7 @@ def read_in(p):
 read_in("data/round1/prices_round_1_day_-2.csv")
 read_in("data/round1/prices_round_1_day_-1.csv")
 read_in("data/round1/prices_round_1_day_0.csv")
-read_in("486adaf8-328b-48e7-be24-7422e9532c06.csv")
+read_in("data/round2/prices_round_2_day_1.csv")
             
 
 # Example list of historical prices (replace this with actual game data)

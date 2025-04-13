@@ -192,6 +192,7 @@ class KelpMM(BaseMarketMaker):
             self.mid_prices = [mid]
 
         theta4 = (2.02733, 0.33522, 0.26031, 0.20494, 0.19853)
+        # theta4 = (1.75335, 0.32513, 0.26138, 0.20530, 0.20733)
 
         predicted = theta4[0]
         for i in range(1, len(theta4)):
@@ -313,46 +314,6 @@ def SQUID_INK_MM(state, squid_ink_traderData):
             
     return orders, updated_squid_ink_traderData
 
-# class SquidInkMM(BaseMarketMaker):
-#     def __init__(self, state, squid_ink_traderData):
-#         super().__init__(state, "SQUID_INK")
-#         self.squid_ink_traderData = squid_ink_traderData
-#         self.updated_traderData = None
-#         self.z_score = 0
-#         self.momentum = 0
-
-#     def compute_thresholds(self):
-#         mid = (self.outstanding_bids[-1] + self.outstanding_asks[0]) / 2
-#         rm = round(mid)
-
-#         if mid != rm:
-#             if self.position > 0:
-#                 mid = math.floor(mid)
-#             else:
-#                 mid = rm
-
-#         z_score_window = 250
-#         momentum_window = 200
-
-#         self.updated_traderData, self.z_score, self.momentum = rolling_tick(
-#             self.squid_ink_traderData, mid, z_score_window, momentum_window
-#         )
-
-#         center = round(mid)
-#         self.sell_threshold = center + 2
-#         self.buy_threshold = center - 2
-
-#         if self.z_score > 2:
-#             self.sell_threshold -= 1
-#             self.buy_threshold -= 1
-#         elif self.z_score < -2:
-#             self.sell_threshold += 1
-#             self.buy_threshold += 1
-
-#     def make_orders(self):
-#         orders = super().make_orders()
-#         return orders, self.updated_traderData
-
 def ORDER_ENGINE(product, short_q, long_q, outstanding_bids, outstanding_asks, sell_threshold, buy_threshold, outstanding):
 
     orders = []
@@ -384,8 +345,7 @@ def ORDER_ENGINE(product, short_q, long_q, outstanding_bids, outstanding_asks, s
     return orders
 
 
-def arb_orders_for_round_2(state, pb2_tradeData):
-
+def arb_orders_for_round_2(state, pb1_traderData, pb2_traderData):
     commodities = ("PICNIC_BASKET1", "PICNIC_BASKET2", "CROISSANTS", "JAMS", "DJEMBES")
 
     outstanding_bids = {}
@@ -393,49 +353,115 @@ def arb_orders_for_round_2(state, pb2_tradeData):
     mids = {}
     vols = {}
     for c in commodities:
-        outstanding_bids[c] = sorted(list(state.order_depths[c].buy_orders.keys()))
-        outstanding_asks[c] = sorted(list(state.order_depths[c].sell_orders.keys()))
+        outstanding_bids[c] = sorted(state.order_depths[c].buy_orders.keys())
+        outstanding_asks[c] = sorted(state.order_depths[c].sell_orders.keys())
         mids[c] = (outstanding_bids[c][-1] + outstanding_asks[c][0]) / 2
         vols[c] = state.position.get(c, 0)
 
-    
-    buy_threshold = 1
-    sell_threshold = 99999999
+    pb1_synthetic = 6 * mids["CROISSANTS"] + 3 * mids["JAMS"] + mids["DJEMBES"]
+    pb2_synthetic = 4 * mids["CROISSANTS"] + 2 * mids["JAMS"]
 
-    premium_pb2 = mids["PICNIC_BASKET2"] - 4 * mids["CROISSANTS"] - 2 * mids["JAMS"]
-    updated_pb2_traderData, zpb2, mpb2 = rolling_tick(pb2_tradeData, premium_pb2, 50, 5, True)
+    premium_pb1 = mids["PICNIC_BASKET1"] - pb1_synthetic
+    premium_pb2 = mids["PICNIC_BASKET2"] - pb2_synthetic
 
-
+    updated_pb1_traderData, zpb1, mpb1 = rolling_tick(pb1_traderData, premium_pb1, 40, 25, True)
+    updated_pb2_traderData, zpb2, mpb2 = rolling_tick(pb2_traderData, premium_pb2, 40, 25, True)
 
     ENGINE_LIMITS = {"PICNIC_BASKET1": 60, "PICNIC_BASKET2": 100, "CROISSANTS": 250, "JAMS": 350, "DJEMBES": 60}
 
-
     commodity_orders = {}
+    short_qs = {k: 0 for k in commodities}
+    long_qs = {k: 0 for k in commodities}
+
+    base_qty = 10
+
+    def z_scaled_qty(z, limit):
+        return int(min(limit, base_qty * (abs(z) / 10)))
+    
+
+    if (vols["PICNIC_BASKET1"] < 0 and zpb1 < 0) or (vols["PICNIC_BASKET1"] > 0 and zpb1 > 0):
+        if vols["PICNIC_BASKET1"] > 0:
+            short_qs["PICNIC_BASKET1"] = vols["PICNIC_BASKET1"]
+        elif vols["PICNIC_BASKET1"] < 0:
+            long_qs["PICNIC_BASKET1"] = vols["PICNIC_BASKET1"]
+
+        if vols["CROISSANTS"] > 0:
+            short_qs["CROISSANTS"] = vols["CROISSANTS"]
+        elif vols["CROISSANTS"] < 0:
+            long_qs["CROISSANTS"] = vols["CROISSANTS"]
+
+        if vols["JAMS"] > 0:
+            short_qs["JAMS"] = vols["JAMS"]
+        elif vols["JAMS"] < 0:
+            long_qs["JAMS"] = vols["JAMS"]
+
+        if vols["DJEMBES"] > 0:
+            short_qs["DJEMBES"] = vols["DJEMBES"]
+        elif vols["DJEMBES"] < 0:
+            long_qs["DJEMBES"] = vols["DJEMBES"]
+
+    elif zpb1 > 10 and mpb1 < 2:
+        qty = z_scaled_qty(zpb1, ENGINE_LIMITS["PICNIC_BASKET1"] + vols["PICNIC_BASKET1"])
+        short_qs["PICNIC_BASKET1"] += qty
+        long_qs["CROISSANTS"] -= 6 * qty
+        long_qs["JAMS"] -= 3 * qty
+        long_qs["DJEMBES"] -= qty
+
+    elif zpb1 < -10 and mpb1 > -2:
+        qty = z_scaled_qty(zpb1, ENGINE_LIMITS["PICNIC_BASKET1"] - vols["PICNIC_BASKET1"])
+        long_qs["PICNIC_BASKET1"] -= qty
+        short_qs["CROISSANTS"] += 6 * qty
+        short_qs["JAMS"] += 3 * qty
+        short_qs["DJEMBES"] += qty
 
 
-    sq = 0
-    lq = 0
-    if zpb2 > 10:
-        sq = ENGINE_LIMITS["PICNIC_BASKET2"] + vols["PICNIC_BASKET2"]
-    elif zpb2 < -10:
-        lq = vols["PICNIC_BASKET2"] - ENGINE_LIMITS["PICNIC_BASKET2"]
-    elif vols["PICNIC_BASKET2"] > 0 and zpb2 > -10:
-        sq = vols["PICNIC_BASKET2"]
-    elif vols["PICNIC_BASKET2"] < 0 and zpb2 < 10:
-        lq = vols["PICNIC_BASKET2"]
+    if (vols["PICNIC_BASKET2"] < 0 and zpb2 < 0) or (vols["PICNIC_BASKET2"] > 0 and zpb2 > 0):
+        if vols["PICNIC_BASKET2"] > 0:
+            short_qs["PICNIC_BASKET2"] = vols["PICNIC_BASKET2"]
+        elif vols["PICNIC_BASKET2"] < 0:
+            long_qs["PICNIC_BASKET2"] = vols["PICNIC_BASKET2"]
 
-    commodity_orders["PICNIC_BASKET2"] = ORDER_ENGINE("PICNIC_BASKET2",
-                                                      sq, lq,
-                                                      outstanding_bids["PICNIC_BASKET2"], outstanding_asks["PICNIC_BASKET2"],
-                                                      mids["PICNIC_BASKET2"] - 1, mids["PICNIC_BASKET2"] + 1,
-                                                      state.order_depths["PICNIC_BASKET2"])
+        if vols["CROISSANTS"] > 0:
+            short_qs["CROISSANTS"] = vols["CROISSANTS"]
+        elif vols["CROISSANTS"] < 0:
+            long_qs["CROISSANTS"] = vols["CROISSANTS"]
 
+        if vols["JAMS"] > 0:
+            short_qs["JAMS"] = vols["JAMS"]
+        elif vols["JAMS"] < 0:
+            long_qs["JAMS"] = vols["JAMS"]
 
-    return commodity_orders, updated_pb2_traderData
+    elif zpb2 > 10 and mpb2 < 2:
+        qty = z_scaled_qty(zpb2, ENGINE_LIMITS["PICNIC_BASKET2"] + vols["PICNIC_BASKET2"])
+        short_qs["PICNIC_BASKET2"] += qty
+        long_qs["CROISSANTS"] -= 4 * qty
+        long_qs["JAMS"] -= 2 * qty
 
+    elif zpb2 < -10 and mpb2 > -2:
+        qty = z_scaled_qty(zpb2, ENGINE_LIMITS["PICNIC_BASKET2"] - vols["PICNIC_BASKET2"])
+        long_qs["PICNIC_BASKET2"] -= qty
+        short_qs["CROISSANTS"] += 4 * qty
+        short_qs["JAMS"] += 2 * qty
 
+    for c in commodities:
 
-        
+        short_qty = min(short_qs[c], ENGINE_LIMITS[c] + vols[c]) if short_qs[c] > 0 else 0
+        long_qty = max(long_qs[c], -(ENGINE_LIMITS[c] - vols[c])) if long_qs[c] < 0 else 0
+
+        if c != "JAMS" and c != "DJEMBES" and c != "CROISSANTS":
+            commodity_orders[c] = ORDER_ENGINE(
+                c,
+                short_qty,
+                long_qty,
+                outstanding_bids[c],
+                outstanding_asks[c],
+                round(mids[c]) if vols[c] > 0 else math.floor(mids[c]),
+                round(mids[c]) if vols[c] > 0 else math.floor(mids[c]),
+                state.order_depths[c],
+            )
+
+    return commodity_orders, updated_pb1_traderData, updated_pb2_traderData
+
 
 
 class Trader:
@@ -444,28 +470,23 @@ class Trader:
 
         orders = {}
 
-        # Sepparate feeds for kelp and squid ink data
-        all_traderData = state.traderData.split(";") if state.traderData else ["", "", ""]
+        all_traderData = state.traderData.split(";") if state.traderData else ["", "", "", "", "", "", ""]
 
-        # orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
-        # orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
-        # orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
+        orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
+        orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
+        orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
 
-        kelp_traderData = "ji"
-        squid_ink_traderData = "ji"
-        com_ords, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2])
+        com_ords, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
 
         for k in com_ords:
             orders[k] = com_ords[k]
 
-        ntd = ";".join([kelp_traderData, squid_ink_traderData, pb2_traderData])
+        ntd = ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
 
         logger.flush(state, orders, 0, ntd)
 
-        # print(orders, state.order_depths["PICNIC_BASKET2"].sell_orders)
 
-
-        return orders, 0, ";".join([kelp_traderData, squid_ink_traderData, pb2_traderData])
+        return orders, 0, ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
 
 
 if __name__ == "__main__":

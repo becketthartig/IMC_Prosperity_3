@@ -18,7 +18,8 @@ def plot_strategy(x, y, z, std_window, z_threshold):
     file_paths = [
         "data/round2/prices_round_2_day_-1.csv",
         "data/round2/prices_round_2_day_0.csv",
-        "data/round2/prices_round_2_day_1.csv"
+        "data/round2/prices_round_2_day_1.csv",
+        "cf0d508c-c8d3-4615-b040-37db5e74467f.csv"
     ]
 
     df = load_and_combine_files(file_paths)
@@ -27,12 +28,20 @@ def plot_strategy(x, y, z, std_window, z_threshold):
     # Basket price, spread, and std
     basket_price = x * pivoted["CROISSANTS"] + y * pivoted["JAMS"] + z * pivoted["DJEMBES"]
     picnic_price = pivoted["PICNIC_BASKET2"]
+    # basket_price2 = ((pivoted["PICNIC_BASKET2"] - 2 * pivoted["JAMS"]) / 4 + (pivoted["PICNIC_BASKET1"] - 3 * pivoted["JAMS"] - pivoted["DJEMBES"]) / 6) / 2
+    # picnic_price2 = pivoted["CROISSANTS"]
+    basket_price2 = ((pivoted["PICNIC_BASKET2"] - 4 * pivoted["CROISSANTS"]) / 2 + (pivoted["PICNIC_BASKET1"] - 6 * pivoted["CROISSANTS"] - pivoted["DJEMBES"]) / 3) / 2
+    picnic_price2 = pivoted["JAMS"]
     spread = picnic_price - basket_price
     spread_std = spread.rolling(window=std_window).std()
+    spread2 = picnic_price2 - basket_price2
+    spread_std2 = spread2.rolling(window=std_window).std()
 
     # Z-score with mean = 0
-    z_score = spread / spread_std
-
+    mean = spread.rolling(std_window).mean()
+    z_score = spread2 / spread_std2
+    # z_score2 = spread2 / spread_std2
+    z_score2 = picnic_price.diff(std_window)
     # Signal logic
     picnic_signal = np.where(z_score > z_threshold, -1,
                       np.where(z_score < -z_threshold, 1, 0))
@@ -44,8 +53,10 @@ def plot_strategy(x, y, z, std_window, z_threshold):
 
     # Plot 1: Spread and Z-score
     ax1.plot(pivoted.index, spread, label="Spread", color='blue')
+    ax1.plot(pivoted.index, spread2, label="Spread", color='orange')
     ax1b = ax1.twinx()
     ax1b.plot(pivoted.index, z_score, label="Z-score", color='purple', linestyle='--')
+    # ax1b.plot(pivoted.index, z_score2, label="Z-score", color='green', linestyle='--')
     ax1.axhline(0, color='black', linestyle='--')
     ax1b.axhline(z_threshold, color='red', linestyle='--')
     ax1b.axhline(-z_threshold, color='green', linestyle='--')
@@ -58,8 +69,10 @@ def plot_strategy(x, y, z, std_window, z_threshold):
     ax1.grid(True)
 
     # Plot 2: Prices
-    ax2.plot(pivoted.index, picnic_price, label="PICNIC_BASKET1", linewidth=2)
-    ax2.plot(pivoted.index, basket_price, label=f"Basket ({x}C + {y}J + {z}D)", linewidth=2)
+    ax2.plot(pivoted.index, picnic_price, label="PICNIC_BASKET2", linewidth=2)
+    ax2.plot(pivoted.index, basket_price, label=f"Basket2 ({x}C + {y}J + {z}D)", linewidth=2)
+    ax2.plot(pivoted.index, picnic_price2, label="PICNIC_BASKET1", linewidth=2)
+    ax2.plot(pivoted.index, basket_price2, label=f"Basket1 ({x}C + {y}J + {z}D)", linewidth=2)
     ax2.set_ylabel("Price")
     ax2.set_title("PICNIC_BASKET1 and Basket Prices")
     ax2.legend()
