@@ -1,6 +1,8 @@
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
 import math
 from abc import ABC, abstractmethod
+from statistics import NormalDist
+import numpy as np
 
 from typing import Any
 import json
@@ -326,8 +328,13 @@ def ORDER_ENGINE(product, short_q, long_q, outstanding_bids, outstanding_asks, s
             short_q -= outstanding.buy_orders[k]
 
     if short_q > 0:
+        mm = 0
+        if outstanding_asks:
+            mm = min(outstanding_asks)
+        else:
+            mm = max(outstanding_bids)
         orders.append(Order(product, 
-                            max(min(outstanding_asks) - 1, sell_threshold), # +1 ?
+                            max(mm - 1, sell_threshold), # +1 ?
                             -short_q))
 
     for k in outstanding_asks:
@@ -338,8 +345,13 @@ def ORDER_ENGINE(product, short_q, long_q, outstanding_bids, outstanding_asks, s
             long_q -= outstanding.sell_orders[k]
         
     if long_q < 0:
+        mm = 0
+        if outstanding_bids:
+            mm = max(outstanding_bids)
+        else:
+            mm = min(outstanding_asks)
         orders.append(Order(product, 
-                            min(max(outstanding_bids) + 1, buy_threshold), # -1 ?
+                            min(mm + 1, buy_threshold), # -1 ?
                             -long_q))
         
     return orders
@@ -463,6 +475,149 @@ def arb_orders_for_round_2(state, pb1_traderData, pb2_traderData):
     return commodity_orders, updated_pb1_traderData, updated_pb2_traderData
 
 
+class BLACK_SCHOLES_CALC():
+
+    def __init__(self, spot_price, days_to_mature, risk_free_rate=0):
+        self.S = spot_price
+        self.t = days_to_mature / 365
+        self.r = risk_free_rate
+        self.N = NormalDist().cdf
+
+    def call_price(self, K, vol):
+        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
+        d2 = d1 - (vol * math.sqrt(self.t))
+        return self.S * self.N(d1) - K * math.exp(-self.r * self.t) * self.N(d2) 
+    
+    def implied_vol(self, K, C, precision_limit=1e-7, iter_limit=100):
+        low = 1e-7
+        high = 2
+        mid = 0
+        for _ in range(iter_limit):
+            mid = (low + high) / 2
+            price = self.call_price(K, mid)
+            if abs(price - C) / max(C, 1e-7) < precision_limit:
+                return mid
+            elif price < C:
+                low = mid
+            else:
+                high = mid
+        return mid 
+    
+    def delta(self, K, vol):
+        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
+        return self.N(d1)
+    
+    def gamma(self, K, vol):
+        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
+        Npd1 = math.exp(-(d1 ** 2) / 2) / math.sqrt(2 * math.pi)
+        return Npd1 / (self.S * vol * math.sqrt(self.t))
+    
+    def vega(self, K, vol):
+        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
+        Npd1 = math.exp(-(d1 ** 2) / 2) / math.sqrt(2 * math.pi)
+        return (self.S * math.sqrt(self.t) * Npd1) / 100
+    
+
+def volcano_orders(state):
+
+    underlying = "VOLCANIC_ROCK"
+    calls = ["VOLCANIC_ROCK_VOUCHER_9500", "VOLCANIC_ROCK_VOUCHER_9750", "VOLCANIC_ROCK_VOUCHER_10000", "VOLCANIC_ROCK_VOUCHER_10250", "VOLCANIC_ROCK_VOUCHER_10500"]
+
+    outstanding_bids, outstanding_asks, mids, posns =  {}, {}, {}, {}
+    for c in calls + [underlying]:
+        outstanding_bids[c] = sorted(state.order_depths[c].buy_orders.keys())
+        outstanding_asks[c] = sorted(state.order_depths[c].sell_orders.keys())
+        if outstanding_bids[c]:
+            if outstanding_asks[c]:
+                mids[c] = (outstanding_bids[c][-1] + outstanding_asks[c][0]) / 2
+            else:
+                mids[c] = outstanding_bids[c][-1]
+        elif outstanding_asks[c]:
+            mids[c] = outstanding_asks[c][0]
+
+        posns[c] = state.position.get(c, 0)
+
+
+    #### ****** 7000000 number MUST be changed for final submission ****** ####
+    bsmodel = BLACK_SCHOLES_CALC(mids[underlying], (6000000 - state.timestamp) / 1000000)
+    IV_fit = (0.23729, 0.00294, 0.14920)
+    # IV_fit = (0.23938, 0.00256, 0.14828)
+
+    implied_vols, expected_vols = {}, {}
+    for c in calls:
+        strike = int(c.split("_")[-1])
+        implied_vols[c] = bsmodel.implied_vol(strike, mids[c])
+        moneyness = math.log(strike / mids[underlying]) / math.sqrt(bsmodel.t)
+        expected_vols[c] = IV_fit[0] * moneyness ** 2 + IV_fit[1] * moneyness + IV_fit[2]
+
+    
+
+    
+
+    orders = {k: [] for k in calls + [underlying]}
+
+    max_stock_pos = 400
+    max_call_pos = 200
+    vol = 0.151
+    misprice_threshold = 0.002
+
+
+    short_qs = {k: 0 for k in calls + [underlying]}
+    long_qs = {k: 0 for k in calls + [underlying]}
+    overvalued = []
+    undervalued = []
+
+    for call in calls:#["VOLCANIC_ROCK_VOUCHER_10250", "VOLCANIC_ROCK_VOUCHER_10500"]:
+        
+        diff = implied_vols[call] - expected_vols[call]
+        if diff > misprice_threshold:
+            overvalued.append(call)
+        elif diff < -misprice_threshold:
+            undervalued.append(call)
+
+    if overvalued and undervalued:
+        for k in overvalued:
+            short_qs[k] = min(10, max_call_pos + posns[k])
+        for k in undervalued:
+            long_qs[k] = max(-10, posns[k] - max_call_pos)
+        # short_qs[overvalued[0]] = min(10, max_call_pos + posns[overvalued[0]])
+        # long_qs[undervalued[0]] = max(-10, posns[undervalued[0]] - max_call_pos)
+
+        # if diff > misprice_threshold:
+        #     short_qs[call] = min(10, max_call_pos + posns[call])
+        # elif diff < -misprice_threshold:
+        #     long_qs[call] = max(-10, posns[call] - max_call_pos)
+
+    total_delta = 0
+    for call in calls:
+        strike = int(call.split("_")[-1])
+        delta = bsmodel.delta(strike, vol)
+        call_pos = -short_qs[call] - long_qs[call] + posns[call]
+        total_delta -= delta * call_pos
+
+
+    if total_delta < posns[underlying]:
+        short_qs[underlying] = -round(total_delta - posns[underlying])
+    elif total_delta > posns[underlying]:
+        long_qs[underlying] = -round(total_delta - posns[underlying])
+
+    for k in calls + [underlying]:
+
+        orders[k] = ORDER_ENGINE(
+            k,
+            short_qs[k],
+            long_qs[k],
+            outstanding_bids[k],
+            outstanding_asks[k],
+            round(mids[k]) if posns[k] < 0 else math.floor(mids[k]),
+            round(mids[k]) if posns[k] < 0 else math.floor(mids[k]),
+            state.order_depths[k],
+        )
+
+
+    return orders
+
+
 
 class Trader:
 
@@ -472,14 +627,22 @@ class Trader:
 
         all_traderData = state.traderData.split(";") if state.traderData else ["", "", "", "", "", "", ""]
 
-        orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
-        orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
-        orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
+        # orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
+        # orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
+        # orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
 
-        com_ords, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
+        # com_ords_r2, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
+        # for k in com_ords_r2:
+        #     orders[k] = com_ords_r2[k]
 
-        for k in com_ords:
-            orders[k] = com_ords[k]
+        kelp_traderData = "hahah"
+        squid_ink_traderData = "hahah"
+        pb1_traderData = "hahah"
+        pb2_traderData = "hahah"
+
+        com_ords_r3 = volcano_orders(state)
+        for k in com_ords_r3:
+            orders[k] = com_ords_r3[k]
 
         ntd = ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
 
