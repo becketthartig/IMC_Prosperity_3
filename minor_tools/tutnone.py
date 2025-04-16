@@ -75,6 +75,8 @@ def KELP_MM(state):
         for i in range(1, len(theta4)):
             if i <= len(mid_prices):
                 predicted += theta4[i] * mid_prices[-i]
+    else:
+        predicted = mid - 10
 
     print(f"Here::0::0::{rr_vol}::{predicted}::0::Here")
 
@@ -114,13 +116,6 @@ def KELP_MM(state):
 
     return orders, updated_data
 
-<<<<<<< HEAD:tutnone.py
-    # product = "KELP"
-
-    # soft_thresh = 40
-    # hard_thresh = 45
-    # position_limit = 50
-=======
 # Stateless function to calulate z-score for a rolling window
 def rolling_zscore_tick(state_str, new_price, window):
     if state_str:
@@ -136,7 +131,6 @@ def rolling_zscore_tick(state_str, new_price, window):
     prices.append(new_price)
     sum_x += new_price
     sum_x2 += new_price ** 2
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
 
     # # Adjust thresholds based on position
     # if abs(rr_vol) >= hard_thresh:
@@ -160,22 +154,6 @@ def rolling_zscore_tick(state_str, new_price, window):
     #         if rr_vol < 0:
     #             orders.append(Order(product, outstanding_bids[-1], -rr_vol))  # Cross bid
 
-<<<<<<< HEAD:tutnone.py
-    # else:
-    #     # Normal market making mode with soft liquidation skew
-    #     # Skew prices based on position
-    #     buy_skew = 0
-    #     sell_skew = 0
-
-    #     if rr_vol >= soft_thresh:
-    #         # Soft liquidation: sell more aggressively
-    #         sell_skew = -1
-    #         buy_skew = -1
-    #     elif rr_vol <= -soft_thresh:
-    #         # Soft liquidation: buy more aggressively
-    #         sell_skew = 1
-    #         buy_skew = 1
-=======
     if len(prices) == window:
         mean = sum_x / window
         variance = (sum_x2 - (sum_x ** 2) / window) / window
@@ -186,7 +164,6 @@ def rolling_zscore_tick(state_str, new_price, window):
         z_score = 0
     
     return ",".join(map(str, prices + [sum_x, sum_x2])), mean, z_score
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
 
     #     sell_threshold = center + 1 + sell_skew
     #     buy_threshold = center - 1 + buy_skew
@@ -216,8 +193,6 @@ def rolling_zscore_tick(state_str, new_price, window):
     # updated_data = ",".join(map(str, mid_prices))
     # return orders, updated_data
 
-<<<<<<< HEAD:tutnone.py
-=======
     updated_squid_ink_traderData, mean, z_score = rolling_zscore_tick(squid_ink_traderData, mid, max_lag)
     print(z_score, state.timestamp)
 
@@ -262,7 +237,6 @@ def rolling_zscore_tick(state_str, new_price, window):
                             -long_q))
             
     return orders, updated_squid_ink_traderData #",".join(map(str, mid_prices))
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
 
 class Trader:
 
@@ -270,13 +244,10 @@ class Trader:
 
         orders = {}
 
-<<<<<<< HEAD:tutnone.py
-=======
         # Sepparate feeds for kelp and squid ink data
         all_traderData = state.traderData.split(";") if state.traderData else ["", ""]
 
 
->>>>>>> 412160d (working with z-score):WORKINGCODE.py
         orders["RAINFOREST_RESIN"] = RAINFOREST_RESIN_MM(state)
         orders["KELP"], trader_data = KELP_MM(state)
 

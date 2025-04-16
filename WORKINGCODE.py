@@ -382,241 +382,25 @@ def arb_orders_for_round_2(state, pb1_traderData, pb2_traderData):
     ENGINE_LIMITS = {"PICNIC_BASKET1": 60, "PICNIC_BASKET2": 100, "CROISSANTS": 250, "JAMS": 350, "DJEMBES": 60}
 
     commodity_orders = {}
-    short_qs = {k: 0 for k in commodities}
-    long_qs = {k: 0 for k in commodities}
-
-    base_qty = 10
-
-    def z_scaled_qty(z, limit):
-        return int(min(limit, base_qty * (abs(z) / 10)))
-    
-
-    if (vols["PICNIC_BASKET1"] < 0 and zpb1 < 0) or (vols["PICNIC_BASKET1"] > 0 and zpb1 > 0):
-        if vols["PICNIC_BASKET1"] > 0:
-            short_qs["PICNIC_BASKET1"] = vols["PICNIC_BASKET1"]
-        elif vols["PICNIC_BASKET1"] < 0:
-            long_qs["PICNIC_BASKET1"] = vols["PICNIC_BASKET1"]
-
-        if vols["CROISSANTS"] > 0:
-            short_qs["CROISSANTS"] = vols["CROISSANTS"]
-        elif vols["CROISSANTS"] < 0:
-            long_qs["CROISSANTS"] = vols["CROISSANTS"]
-
-        if vols["JAMS"] > 0:
-            short_qs["JAMS"] = vols["JAMS"]
-        elif vols["JAMS"] < 0:
-            long_qs["JAMS"] = vols["JAMS"]
-
-        if vols["DJEMBES"] > 0:
-            short_qs["DJEMBES"] = vols["DJEMBES"]
-        elif vols["DJEMBES"] < 0:
-            long_qs["DJEMBES"] = vols["DJEMBES"]
-
-    elif zpb1 > 10 and mpb1 < 2:
-        qty = z_scaled_qty(zpb1, ENGINE_LIMITS["PICNIC_BASKET1"] + vols["PICNIC_BASKET1"])
-        short_qs["PICNIC_BASKET1"] += qty
-        long_qs["CROISSANTS"] -= 6 * qty
-        long_qs["JAMS"] -= 3 * qty
-        long_qs["DJEMBES"] -= qty
-
-    elif zpb1 < -10 and mpb1 > -2:
-        qty = z_scaled_qty(zpb1, ENGINE_LIMITS["PICNIC_BASKET1"] - vols["PICNIC_BASKET1"])
-        long_qs["PICNIC_BASKET1"] -= qty
-        short_qs["CROISSANTS"] += 6 * qty
-        short_qs["JAMS"] += 3 * qty
-        short_qs["DJEMBES"] += qty
 
 
-    if (vols["PICNIC_BASKET2"] < 0 and zpb2 < 0) or (vols["PICNIC_BASKET2"] > 0 and zpb2 > 0):
-        if vols["PICNIC_BASKET2"] > 0:
-            short_qs["PICNIC_BASKET2"] = vols["PICNIC_BASKET2"]
-        elif vols["PICNIC_BASKET2"] < 0:
-            long_qs["PICNIC_BASKET2"] = vols["PICNIC_BASKET2"]
+    sq = 0
+    lq = 0
+    if zpb2 > 10:
+        sq = ENGINE_LIMITS["PICNIC_BASKET2"] + vols["PICNIC_BASKET2"]
+    elif zpb2 < -10:
+        lq = vols["PICNIC_BASKET2"] - ENGINE_LIMITS["PICNIC_BASKET2"]
+    elif vols["PICNIC_BASKET2"] > 0 and zpb2 > -10:
+        sq = vols["PICNIC_BASKET2"]
+    elif vols["PICNIC_BASKET2"] < 0 and zpb2 < 10:
+        lq = vols["PICNIC_BASKET2"]
 
-        if vols["CROISSANTS"] > 0:
-            short_qs["CROISSANTS"] = vols["CROISSANTS"]
-        elif vols["CROISSANTS"] < 0:
-            long_qs["CROISSANTS"] = vols["CROISSANTS"]
-
-        if vols["JAMS"] > 0:
-            short_qs["JAMS"] = vols["JAMS"]
-        elif vols["JAMS"] < 0:
-            long_qs["JAMS"] = vols["JAMS"]
-
-    elif zpb2 > 10 and mpb2 < 2:
-        qty = z_scaled_qty(zpb2, ENGINE_LIMITS["PICNIC_BASKET2"] + vols["PICNIC_BASKET2"])
-        short_qs["PICNIC_BASKET2"] += qty
-        long_qs["CROISSANTS"] -= 4 * qty
-        long_qs["JAMS"] -= 2 * qty
-
-    elif zpb2 < -10 and mpb2 > -2:
-        qty = z_scaled_qty(zpb2, ENGINE_LIMITS["PICNIC_BASKET2"] - vols["PICNIC_BASKET2"])
-        long_qs["PICNIC_BASKET2"] -= qty
-        short_qs["CROISSANTS"] += 4 * qty
-        short_qs["JAMS"] += 2 * qty
-
-    for c in commodities:
-
-        short_qty = min(short_qs[c], ENGINE_LIMITS[c] + vols[c]) if short_qs[c] > 0 else 0
-        long_qty = max(long_qs[c], -(ENGINE_LIMITS[c] - vols[c])) if long_qs[c] < 0 else 0
-
-        if c != "JAMS" and c != "DJEMBES" and c != "CROISSANTS":
-            commodity_orders[c] = ORDER_ENGINE(
-                c,
-                short_qty,
-                long_qty,
-                outstanding_bids[c],
-                outstanding_asks[c],
-                round(mids[c]) if vols[c] > 0 else math.floor(mids[c]),
-                round(mids[c]) if vols[c] > 0 else math.floor(mids[c]),
-                state.order_depths[c],
-            )
-
-    return commodity_orders, updated_pb1_traderData, updated_pb2_traderData
+    commodity_orders["PICNIC_BASKET2"] = ORDER_ENGINE("PICNIC_BASKET2", sq, lq, outstanding_bids["PICNIC_BASKET2"], outstanding_asks["PICNIC_BASKET2"], mids["PICNIC_BASKET2"] - 1, mids["PICNIC_BASKET2"] + 1, state.order_depths["PICNIC_BASKET2"])
 
 
-class BLACK_SCHOLES_CALC():
+    return commodity_orders, updated_pb2_traderData
 
-    def __init__(self, spot_price, days_to_mature, risk_free_rate=0):
-        self.S = spot_price
-        self.t = days_to_mature / 365
-        self.r = risk_free_rate
-        self.N = NormalDist().cdf
-
-    def call_price(self, K, vol):
-        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
-        d2 = d1 - (vol * math.sqrt(self.t))
-        return self.S * self.N(d1) - K * math.exp(-self.r * self.t) * self.N(d2) 
-    
-    def implied_vol(self, K, C, precision_limit=1e-7, iter_limit=100):
-        low = 1e-7
-        high = 2
-        mid = 0
-        for _ in range(iter_limit):
-            mid = (low + high) / 2
-            price = self.call_price(K, mid)
-            if abs(price - C) / max(C, 1e-7) < precision_limit:
-                return mid
-            elif price < C:
-                low = mid
-            else:
-                high = mid
-        return mid 
-    
-    def delta(self, K, vol):
-        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
-        return self.N(d1)
-    
-    def gamma(self, K, vol):
-        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
-        Npd1 = math.exp(-(d1 ** 2) / 2) / math.sqrt(2 * math.pi)
-        return Npd1 / (self.S * vol * math.sqrt(self.t))
-    
-    def vega(self, K, vol):
-        d1 = (math.log(self.S / K) + (self.r + vol ** 2 / 2) * self.t) / (vol * math.sqrt(self.t))
-        Npd1 = math.exp(-(d1 ** 2) / 2) / math.sqrt(2 * math.pi)
-        return (self.S * math.sqrt(self.t) * Npd1) / 100
-    
-
-def volcano_orders(state):
-
-    underlying = "VOLCANIC_ROCK"
-    calls = ["VOLCANIC_ROCK_VOUCHER_9500", "VOLCANIC_ROCK_VOUCHER_9750", "VOLCANIC_ROCK_VOUCHER_10000", "VOLCANIC_ROCK_VOUCHER_10250", "VOLCANIC_ROCK_VOUCHER_10500"]
-
-    outstanding_bids, outstanding_asks, mids, posns =  {}, {}, {}, {}
-    for c in calls + [underlying]:
-        outstanding_bids[c] = sorted(state.order_depths[c].buy_orders.keys())
-        outstanding_asks[c] = sorted(state.order_depths[c].sell_orders.keys())
-        if outstanding_bids[c]:
-            if outstanding_asks[c]:
-                mids[c] = (outstanding_bids[c][-1] + outstanding_asks[c][0]) / 2
-            else:
-                mids[c] = outstanding_bids[c][-1]
-        elif outstanding_asks[c]:
-            mids[c] = outstanding_asks[c][0]
-
-        posns[c] = state.position.get(c, 0)
-
-
-    #### ****** 7000000 number MUST be changed for final submission ****** ####
-    bsmodel = BLACK_SCHOLES_CALC(mids[underlying], (6000000 - state.timestamp) / 1000000)
-    IV_fit = (0.23729, 0.00294, 0.14920)
-    # IV_fit = (0.23938, 0.00256, 0.14828)
-
-    implied_vols, expected_vols = {}, {}
-    for c in calls:
-        strike = int(c.split("_")[-1])
-        implied_vols[c] = bsmodel.implied_vol(strike, mids[c])
-        moneyness = math.log(strike / mids[underlying]) / math.sqrt(bsmodel.t)
-        expected_vols[c] = IV_fit[0] * moneyness ** 2 + IV_fit[1] * moneyness + IV_fit[2]
-
-    
-
-    
-
-    orders = {k: [] for k in calls + [underlying]}
-
-    max_stock_pos = 400
-    max_call_pos = 200
-    vol = 0.151
-    misprice_threshold = 0.002
-
-
-    short_qs = {k: 0 for k in calls + [underlying]}
-    long_qs = {k: 0 for k in calls + [underlying]}
-    overvalued = []
-    undervalued = []
-
-    for call in calls:#["VOLCANIC_ROCK_VOUCHER_10250", "VOLCANIC_ROCK_VOUCHER_10500"]:
         
-        diff = implied_vols[call] - expected_vols[call]
-        if diff > misprice_threshold:
-            overvalued.append(call)
-        elif diff < -misprice_threshold:
-            undervalued.append(call)
-
-    if overvalued and undervalued:
-        for k in overvalued:
-            short_qs[k] = min(10, max_call_pos + posns[k])
-        for k in undervalued:
-            long_qs[k] = max(-10, posns[k] - max_call_pos)
-        # short_qs[overvalued[0]] = min(10, max_call_pos + posns[overvalued[0]])
-        # long_qs[undervalued[0]] = max(-10, posns[undervalued[0]] - max_call_pos)
-
-        # if diff > misprice_threshold:
-        #     short_qs[call] = min(10, max_call_pos + posns[call])
-        # elif diff < -misprice_threshold:
-        #     long_qs[call] = max(-10, posns[call] - max_call_pos)
-
-    total_delta = 0
-    for call in calls:
-        strike = int(call.split("_")[-1])
-        delta = bsmodel.delta(strike, vol)
-        call_pos = -short_qs[call] - long_qs[call] + posns[call]
-        total_delta -= delta * call_pos
-
-
-    if total_delta < posns[underlying]:
-        short_qs[underlying] = -round(total_delta - posns[underlying])
-    elif total_delta > posns[underlying]:
-        long_qs[underlying] = -round(total_delta - posns[underlying])
-
-    for k in calls + [underlying]:
-
-        orders[k] = ORDER_ENGINE(
-            k,
-            short_qs[k],
-            long_qs[k],
-            outstanding_bids[k],
-            outstanding_asks[k],
-            round(mids[k]) if posns[k] < 0 else math.floor(mids[k]),
-            round(mids[k]) if posns[k] < 0 else math.floor(mids[k]),
-            state.order_depths[k],
-        )
-
-
-    return orders
-
 
 
 class Trader:
