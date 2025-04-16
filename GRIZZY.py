@@ -267,9 +267,9 @@ def SQUID_INK_MM(state, squid_ink_traderData):
         else:
             mid = rm
 
-
-    z_score_window = 250
-    momentum_window = 200
+            
+    z_score_window = 440
+    momentum_window = 100
 
     updated_squid_ink_traderData, z_score, momentum = rolling_tick(squid_ink_traderData, mid, z_score_window, momentum_window)
 
@@ -656,12 +656,9 @@ def volcano_orders(state):
         hedge_limits[c] = min(20, max_call_pos - posns[c] if total_delta < 0 else max_call_pos + posns[c])
 
 
-    print("DELTA:", total_delta, "GAMMA:", total_gamma)
-    result = optimize_DG(total_delta, total_gamma, deltas, gammas, all_mispricings, misprice_threshold, hedge_limits)
-    print(result)
-    if result:
-        print("d1", deltas[result["keys"][0]], "d2", deltas[result["keys"][1]])
-        if abs(total_delta) > delta_hedge_threshold:
+    if abs(total_delta) > delta_hedge_threshold:
+        result = optimize_DG(total_delta, total_gamma, deltas, gammas, all_mispricings, misprice_threshold, hedge_limits)
+        if result:
             for i in range(2):
                 if result["coeffs"][i] < 0:
                     short_qs[result["keys"][i]] -= result["coeffs"][i]
@@ -693,18 +690,18 @@ class Trader:
 
         all_traderData = state.traderData.split(";") if state.traderData else ["", "", "", ""]
 
-        # orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
-        # orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
-        # orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
+        orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
+        orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
+        orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
 
-        # com_ords_r2, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
-        # for k in com_ords_r2:
-        #     orders[k] = com_ords_r2[k]
+        com_ords_r2, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
+        for k in com_ords_r2:
+            orders[k] = com_ords_r2[k]
 
-        kelp_traderData = "hahah"
-        squid_ink_traderData = "hahah"
-        pb1_traderData = "hahah"
-        pb2_traderData = "hahah"
+        # kelp_traderData = "hahah"
+        # squid_ink_traderData = "hahah"
+        # pb1_traderData = "hahah"
+        # pb2_traderData = "hahah"
 
         com_ords_r3 = volcano_orders(state)
         for k in com_ords_r3:
