@@ -1,8 +1,9 @@
-from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
+from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState, ConversionObservation
 import math
 from abc import ABC, abstractmethod
 from statistics import NormalDist
-import numpy as np
+# import numpy as np
+import pandas as pd
 
 from typing import Any
 import json
@@ -194,6 +195,8 @@ class KelpMM(BaseMarketMaker):
             self.mid_prices = [mid]
 
         theta4 = (2.02733, 0.33522, 0.26031, 0.20494, 0.19853)
+
+        # theta44 = (1.40546, 0.32203, 0.26097, 0.20511, 0.21121)
         # theta4 = (1.75335, 0.32513, 0.26138, 0.20530, 0.20733)
 
         predicted = theta4[0]
@@ -604,7 +607,7 @@ def volcano_orders(state):
         posns[c] = state.position.get(c, 0)
 
     #### ****** 7000000 number MUST be changed for final submission ****** ####
-    bsmodel = BLACK_SCHOLES_CALC(mids[underlying], (8000000 - state.timestamp) / 1000000)
+    bsmodel = BLACK_SCHOLES_CALC(mids[underlying], (5000000 - state.timestamp) / 1000000)
     IV_fit = (0.23729, 0.00294, 0.14920)
 
     max_stock_pos = 400
@@ -681,6 +684,47 @@ def volcano_orders(state):
     return orders
 
 
+def get_line_pandas(file_path, line_number):
+    """
+    Retrieves a specific line from a CSV file using pandas.
+
+    Args:
+        file_path (str): The path to the CSV file.
+        line_number (int): The line number to retrieve (1-based index).
+
+    Returns:
+        pd.Series: A pandas Series representing the row, or None if the line number is invalid.
+    """
+    try:
+        df = pd.read_csv(file_path, skiprows=line_number - 1, nrows=1, header=None)
+        return df.iloc[0]
+    except IndexError:
+        return None
+
+
+def macarons(state):
+    
+    # convs = get_line_pandas("data/round4/observations_round_4_day_3.csv", round(state.timestamp / 100 + 2))
+    # state.observations.conversionObservations["MAGNIFICENT_MACARONS"] = ConversionObservation(convs[1], convs[2], convs[3], convs[4], convs[5], convs[6], convs[7])
+    obs = state.observations.conversionObservations.get("MAGNIFICENT_MACARONS", None)
+    if obs is None:
+        return []
+    
+    buy_price = obs.askPrice + obs.transportFees + obs.importTariff
+
+    outstanding_asks = sorted(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
+    outstanding_bids = sorted(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
+    mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
+
+
+
+    # print(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
+    # print(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
+
+    return [Order("MAGNIFICENT_MACARONS", max(int(obs.bidPrice - 0.5), int(buy_price + 1)), -(10 + state.position.get("MAGNIFICENT_MACARONS", 0)))]
+
+
+
 
 class Trader:
 
@@ -690,26 +734,30 @@ class Trader:
 
         all_traderData = state.traderData.split(";") if state.traderData else ["", "", "", ""]
 
-        orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
-        orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
-        orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
+        # orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
+        # orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
+        # orders["SQUID_INK"], squid_ink_traderData = SQUID_INK_MM(state, all_traderData[1])
 
-        com_ords_r2, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
-        for k in com_ords_r2:
-            orders[k] = com_ords_r2[k]
+        # com_ords_r2, pb1_traderData, pb2_traderData = arb_orders_for_round_2(state, all_traderData[2], all_traderData[3])
+        # for k in com_ords_r2:
+        #     orders[k] = com_ords_r2[k]
 
-        # kelp_traderData = "hahah"
-        # squid_ink_traderData = "hahah"
-        # pb1_traderData = "hahah"
-        # pb2_traderData = "hahah"
+        kelp_traderData = "hahah"
+        squid_ink_traderData = "hahah"
+        pb1_traderData = "hahah"
+        pb2_traderData = "hahah"
 
-        com_ords_r3 = volcano_orders(state)
-        for k in com_ords_r3:
-            orders[k] = com_ords_r3[k]
+        orders["MAGNIFICENT_MACARONS"] = macarons(state)
+
+
+        # com_ords_r3 = volcano_orders(state)
+        # for k in com_ords_r3:
+        #     orders[k] = com_ords_r3[k]
 
         ntd = ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
 
         logger.flush(state, orders, 0, ntd)
 
 
-        return orders, 0, ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
+
+        return orders, min(-state.position.get("MAGNIFICENT_MACARONS", 0), 10), ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])

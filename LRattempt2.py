@@ -20,6 +20,7 @@ read_in("data/round1/prices_round_1_day_-2.csv")
 read_in("data/round1/prices_round_1_day_-1.csv")
 read_in("data/round1/prices_round_1_day_0.csv")
 read_in("data/round2/prices_round_2_day_1.csv")
+read_in("data/round3/prices_round_3_day_2.csv")
             
 
 # Example list of historical prices (replace this with actual game data)

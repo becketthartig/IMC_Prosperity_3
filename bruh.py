@@ -21,6 +21,20 @@ def plot_time_series2(data, data2, title="Time Series Plot", xlabel="Time", ylab
     plt.tight_layout()
     plt.show()
 
+def plot_time_series4(data, data2, data3, data4, title="Time Series Plot", xlabel="Time", ylabel="Value"):
+    plt.figure(figsize=(10, 4))
+    plt.plot(data, color='red', linestyle='-', label="bid")
+    plt.plot(data2, color='blue', linestyle='-', label="ask")
+    plt.plot(data3, color='orange', linestyle='-', label="imp_bid")
+    plt.plot(data4, color='green', linestyle='-', label="imp_ask")
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 # hist = []
 # import csv
 # def read_in(p):
