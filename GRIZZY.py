@@ -607,7 +607,7 @@ def volcano_orders(state):
         posns[c] = state.position.get(c, 0)
 
     #### ****** 7000000 number MUST be changed for final submission ****** ####
-    bsmodel = BLACK_SCHOLES_CALC(mids[underlying], (5000000 - state.timestamp) / 1000000)
+    bsmodel = BLACK_SCHOLES_CALC(mids[underlying], (4000000 - state.timestamp) / 1000000)
     IV_fit = (0.23729, 0.00294, 0.14920)
 
     max_stock_pos = 400
@@ -739,38 +739,22 @@ def macarons(state, mac_traderData):
         if slope > SLOPE_THRESHOLD:
             order.append(Order("MAGNIFICENT_MACARONS", round(mid), -(75 + mm_vol)))
         else:
-            # order.append(Order("MAGNIFICENT_MACARONS", round(mid) - 1, min(10, 75 - mm_vol)))
             if mm_vol < 0:
                 convs = min(10, -mm_vol)
-                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, max(0, 65 - mm_vol)))
             else:
-                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, 75 - mm_vol))
     else:
         if mid > MEAN_REVERSION_THRESHOLD:
-            order.append(Order("MAGNIFICENT_MACARONS", round(mid), -max(75 + mm_vol)))
+            order.append(Order("MAGNIFICENT_MACARONS", round(mid), -(75 + mm_vol)))
         else:
-            # convs = min(10, -mm_vol)
             if mm_vol < 0:
                 convs = min(10, -mm_vol)
-                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, max(0, 65 - mm_vol)))
             else:
-                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
-            # order.append(Order("MAGNIFICENT_MACARONS", round(mid) - 1, min(10, 75 - mm_vol)))
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, 75 - mm_vol))
+                
 
-    
-    # buy_price = obs.askPrice + obs.transportFees + obs.importTariff
-
-    # outstanding_asks = sorted(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
-    # outstanding_bids = sorted(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
-    # mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
-
-    # convs = 0
-
-    # print(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
-    # print(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
-
-    # return [Order("MAGNIFICENT_MACARONS", max(int(obs.bidPrice - 0.5), int(buy_price + 1)), -(10 + state.position.get("MAGNIFICENT_MACARONS", 0)))]
-    # return [Order("MAGNIFICENT_MACARONS", round(buy_price) + 1, -(75 + state.position.get("MAGNIFICENT_MACARONS", 0)))], ",".join(map(str, sun_values)), convs
     return order, convs, ",".join(map(str, sun_values))
 
 
@@ -796,15 +780,13 @@ class Trader:
         squid_ink_traderData = "hahah"
         pb1_traderData = "hahah"
         pb2_traderData = "hahah"
-
-        orders["MAGNIFICENT_MACARONS"], convs, mac_traderData = macarons(state, all_traderData[4])
-
-        
-
+        # mac_traderData = "hahah"
 
         # com_ords_r3 = volcano_orders(state)
         # for k in com_ords_r3:
         #     orders[k] = com_ords_r3[k]
+
+        orders["MAGNIFICENT_MACARONS"], convs, mac_traderData = macarons(state, all_traderData[4])
 
         ntd = ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData, mac_traderData])
 
