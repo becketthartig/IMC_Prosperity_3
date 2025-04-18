@@ -13,14 +13,14 @@ def read_in(p):
             mp = float(li[i][0].split(";")[15])
             sec = li[i][0].split(";")[2]
 
-            if sec == "SQUID_INK":
+            if sec == "MAGNIFICENT_MACARONS":
                 hist.append(mp)
 
 # Load all the files
-read_in("data/round1/prices_round_1_day_-2.csv")
-read_in("data/round1/prices_round_1_day_-1.csv")
-read_in("data/round1/prices_round_1_day_0.csv")
-read_in("data/round1/prices_round_1_day_1.csv")
+read_in("data/round4/prices_round_4_day_1.csv")
+read_in("data/round4/prices_round_4_day_2.csv")
+read_in("data/round4/prices_round_4_day_3.csv")
+# read_in("data/round1/prices_round_1_day_1.csv")
 
 window = 250
 momentum_window = 200  # Customize as needed
@@ -35,7 +35,8 @@ for i in range(window, len(prices)):
     window_slice = prices[i - window:i]
     mean = np.mean(window_slice)
     std = np.std(window_slice)
-    rolling_mean[i] = mean
+    # rolling_mean[i] = mean
+    rolling_mean[i] = 622
     rolling_std[i] = std
     if std > 0:
         z_scores[i] = (prices[i] - mean) / std

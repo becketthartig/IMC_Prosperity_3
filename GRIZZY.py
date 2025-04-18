@@ -702,26 +702,65 @@ def get_line_pandas(file_path, line_number):
         return None
 
 
-def macarons(state):
+def macarons(state, mac_traderData):
     
     # convs = get_line_pandas("data/round4/observations_round_4_day_3.csv", round(state.timestamp / 100 + 2))
     # state.observations.conversionObservations["MAGNIFICENT_MACARONS"] = ConversionObservation(convs[1], convs[2], convs[3], convs[4], convs[5], convs[6], convs[7])
     obs = state.observations.conversionObservations.get("MAGNIFICENT_MACARONS", None)
     if obs is None:
-        return []
+        return [], 0, ""
+    sun_index = obs.sunlightIndex
+    if not mac_traderData:
+        return [], 0, str(sun_index)
     
-    buy_price = obs.askPrice + obs.transportFees + obs.importTariff
+    max_lag = 10
+    sun_values = [float(p) for p in mac_traderData.split(",")[1 - max_lag:]] + [sun_index]
+    slope = (sun_values[-1] - sun_values[0]) / len(sun_values)
+    # print(f"ZAZA{slope}ZAZA")
+
+
+    MEAN_REVERSION_THRESHOLD = 622
+    CSI_THRESHOLD = 49.75
+    SLOPE_THRESHOLD = 0.075
+
+    mm_vol = state.position.get("MAGNIFICENT_MACARONS", 0)
+    convs = 0
 
     outstanding_asks = sorted(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
     outstanding_bids = sorted(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
     mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
+    
+    order = []
 
+    ### DECISION TREE ###
+    if sun_index < CSI_THRESHOLD:
+        if slope > SLOPE_THRESHOLD:
+            order.append(Order("MAGNIFICENT_MACARONS", round(mid) + 1, -max(10, 75 + mm_vol)))
+        else:
+            # order.append(Order("MAGNIFICENT_MACARONS", round(mid) - 1, min(10, 75 - mm_vol)))
+            convs = min(10, -mm_vol)
+    else:
+        if mid > MEAN_REVERSION_THRESHOLD:
+            order.append(Order("MAGNIFICENT_MACARONS", round(mid) + 1, -max(10, 75 + mm_vol)))
+        else:
+            convs = min(10, -mm_vol)
+            # order.append(Order("MAGNIFICENT_MACARONS", round(mid) - 1, min(10, 75 - mm_vol)))
 
+    
+    # buy_price = obs.askPrice + obs.transportFees + obs.importTariff
+
+    # outstanding_asks = sorted(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
+    # outstanding_bids = sorted(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
+    # mid = (outstanding_bids[-1] + outstanding_asks[0]) / 2
+
+    # convs = 0
 
     # print(state.order_depths["MAGNIFICENT_MACARONS"].buy_orders.keys())
     # print(state.order_depths["MAGNIFICENT_MACARONS"].sell_orders.keys())
 
-    return [Order("MAGNIFICENT_MACARONS", max(int(obs.bidPrice - 0.5), int(buy_price + 1)), -(10 + state.position.get("MAGNIFICENT_MACARONS", 0)))]
+    # return [Order("MAGNIFICENT_MACARONS", max(int(obs.bidPrice - 0.5), int(buy_price + 1)), -(10 + state.position.get("MAGNIFICENT_MACARONS", 0)))]
+    # return [Order("MAGNIFICENT_MACARONS", round(buy_price) + 1, -(75 + state.position.get("MAGNIFICENT_MACARONS", 0)))], ",".join(map(str, sun_values)), convs
+    return order, convs, ",".join(map(str, sun_values))
 
 
 
@@ -732,7 +771,7 @@ class Trader:
 
         orders = {}
 
-        all_traderData = state.traderData.split(";") if state.traderData else ["", "", "", ""]
+        all_traderData = state.traderData.split(";") if state.traderData else ["", "", "", "", ""]
 
         # orders["RAINFOREST_RESIN"] = RainforestResinMM(state).make_orders()
         # orders["KELP"], kelp_traderData = KelpMM(state, all_traderData[0]).make_orders()
@@ -747,17 +786,19 @@ class Trader:
         pb1_traderData = "hahah"
         pb2_traderData = "hahah"
 
-        orders["MAGNIFICENT_MACARONS"] = macarons(state)
+        orders["MAGNIFICENT_MACARONS"], convs, mac_traderData = macarons(state, all_traderData[4])
+
+        
 
 
         # com_ords_r3 = volcano_orders(state)
         # for k in com_ords_r3:
         #     orders[k] = com_ords_r3[k]
 
-        ntd = ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
+        ntd = ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData, mac_traderData])
 
         logger.flush(state, orders, 0, ntd)
+            
 
-
-
-        return orders, min(-state.position.get("MAGNIFICENT_MACARONS", 0), 10), ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
+        return orders, convs, ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData, mac_traderData])
+        # return orders, min(-state.position.get("MAGNIFICENT_MACARONS", 0), 10), ";".join([kelp_traderData, squid_ink_traderData, pb1_traderData, pb2_traderData])
