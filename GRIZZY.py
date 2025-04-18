@@ -732,18 +732,29 @@ def macarons(state, mac_traderData):
     
     order = []
 
+    buy_price = obs.askPrice + obs.transportFees + obs.importTariff
+
     ### DECISION TREE ###
     if sun_index < CSI_THRESHOLD:
         if slope > SLOPE_THRESHOLD:
-            order.append(Order("MAGNIFICENT_MACARONS", round(mid) + 1, -max(10, 75 + mm_vol)))
+            order.append(Order("MAGNIFICENT_MACARONS", round(mid), -(75 + mm_vol)))
         else:
             # order.append(Order("MAGNIFICENT_MACARONS", round(mid) - 1, min(10, 75 - mm_vol)))
-            convs = min(10, -mm_vol)
+            if mm_vol < 0:
+                convs = min(10, -mm_vol)
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
+            else:
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
     else:
         if mid > MEAN_REVERSION_THRESHOLD:
-            order.append(Order("MAGNIFICENT_MACARONS", round(mid) + 1, -max(10, 75 + mm_vol)))
+            order.append(Order("MAGNIFICENT_MACARONS", round(mid), -max(75 + mm_vol)))
         else:
-            convs = min(10, -mm_vol)
+            # convs = min(10, -mm_vol)
+            if mm_vol < 0:
+                convs = min(10, -mm_vol)
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
+            else:
+                order.append(Order("MAGNIFICENT_MACARONS", round(buy_price) - 1, (75 - mm_vol)))
             # order.append(Order("MAGNIFICENT_MACARONS", round(mid) - 1, min(10, 75 - mm_vol)))
 
     
