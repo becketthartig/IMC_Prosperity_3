@@ -38,5 +38,20 @@ we would've definitely liked to come up with a stronger model for this, as even 
 z-score was high, that didn't always guarantee it was profitable to trade long/short, 
 one way, every time.
 
+## Round 3
+Round 3 brought Volcanic Rock and Volcanic Rock vouchers that acted like call options
+for Volcanic Rock. Thinking about the many ways quant firms and options market-makers
+trade options in real life, we look to finding mispricings in things like implied 
+volatility and true volatility which was ultimately the strategy that we used to trade.
+Using the Black-Scholes model, we were able to calculate options implied volatility and 
+graph it against moneyness for all the historical data we had. The resulting graph 
+pictured below, shows us that the implied volatility for all the available options often
+deviated from a mean that we determined by fitting a 2-degree polynomial to the data.
+As such we were able to profitably trade on mispriced volatility. Our strategy attempted,
+to good success, making these trades and using delayed delta hedging, and an optimization
+algorithm to determine the best security, option or underlying, to hedge delta with while 
+taking into account other option mispricings and the best options to balance gamma. 
+
+<img width="796" alt="PNG image" src="https://github.com/user-attachments/assets/adf2bbf6-9dec-4070-a7cc-915bdee62de1" />
 
 
